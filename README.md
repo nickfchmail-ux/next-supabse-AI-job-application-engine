@@ -1,4 +1,4 @@
-# AI powered Jobs Application App
+# AI powered Jobs Application Engine
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=OBGCNZgf6k0">
