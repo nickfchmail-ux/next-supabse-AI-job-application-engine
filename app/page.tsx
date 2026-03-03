@@ -1,28 +1,48 @@
+import { getResumeInfo } from "@/app/actions/resume";
 import Navbar from "@/components/Navbar";
 import ScrapePanel from "@/components/ScrapePanel";
+import { getUserId } from "@/lib/auth";
+import { formatDate } from "@/lib/dateUtils";
 import { supabase } from "@/lib/supabase";
+import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 export const revalidate = 0;
 
-export default async function Home() {
-  const [{ count: fitCount }, { count: notFitCount }, { data: recent }] =
-    await Promise.all([
-      supabase
-        .from("jobs")
-        .select("*", { count: "exact", head: true })
-        .eq("fit", true),
-      supabase
-        .from("jobs")
-        .select("*", { count: "exact", head: true })
-        .eq("fit", false),
-      supabase
-        .from("jobs")
-        .select("id, title, company, fit, fit_score, url, posted_date")
-        .order("created_at", { ascending: false })
-        .limit(5),
-    ]);
+export const metadata: Metadata = {
+  title: "Dashboard",
+};
 
+export default async function Home() {
+  const userId = await getUserId();
+  if (!userId) redirect("/login");
+
+  const [
+    { count: fitCount },
+    { count: notFitCount },
+    { data: recent },
+    resumeInfo,
+  ] = await Promise.all([
+    supabase
+      .from("jobs")
+      .select("*", { count: "exact", head: true })
+      .eq("fit", true)
+      .eq("user_id", userId),
+    supabase
+      .from("jobs")
+      .select("*", { count: "exact", head: true })
+      .eq("fit", false)
+      .eq("user_id", userId),
+    supabase
+      .from("jobs")
+      .select("id, title, company, fit, fit_score, url, posted_date")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true })
+      .limit(5),
+    getResumeInfo(),
+  ]);
+  const hasResume = resumeInfo.ok && !!resumeInfo.fileName;
   const total = (fitCount ?? 0) + (notFitCount ?? 0);
 
   return (
@@ -32,7 +52,7 @@ export default async function Home() {
       <div className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
         <div className="max-w-5xl mx-auto px-4 sm:px-8 py-12">
           <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-            Jobs Dashboard
+            Jobs Hunter
           </h1>
           <p className="mt-2 text-zinc-500 dark:text-zinc-400">
             {total} job{total !== 1 ? "s" : ""} scraped and analysed by AI
@@ -41,7 +61,7 @@ export default async function Home() {
       </div>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-8 py-10 space-y-10">
-        <ScrapePanel />
+        <ScrapePanel hasResume={hasResume} />
         {/* Stat cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <Link
@@ -145,32 +165,58 @@ export default async function Home() {
               {recent.map((job) => (
                 <div
                   key={job.id}
-                  className="flex items-center justify-between px-5 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                  className="relative flex items-center justify-between px-5 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors group"
                 >
+                  {/* Stretched link covers the whole row */}
+                  <Link
+                    href={`/jobs/${job.id}`}
+                    className="absolute inset-0 z-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
+                    aria-label={`View details for ${job.title}`}
+                  />
                   <div className="min-w-0 flex-1">
-                    <Link
-                      href={job.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm font-medium text-zinc-800 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400 truncate block transition-colors"
-                    >
+                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 truncate transition-colors">
                       {job.title}
-                    </Link>
+                    </p>
                     <p className="text-xs text-zinc-400 dark:text-zinc-500">
-                      {job.company} · {job.posted_date}
+                      {job.company} · {formatDate(job.posted_date)}
                     </p>
                   </div>
-                  <div className="ml-4 flex items-center gap-2 shrink-0">
+                  <div className="relative z-10 ml-4 flex items-center gap-2 shrink-0">
                     {job.fit_score !== null && (
                       <span className="text-xs text-zinc-400">
                         {job.fit_score}/100
                       </span>
                     )}
                     <span
-                      className={`text-xs font-medium px-2 py-0.5 rounded-full ${job.fit ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400" : "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"}`}
+                      className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                        job.fit
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
+                          : "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
+                      }`}
                     >
                       {job.fit ? "Fit" : "Not fit"}
                     </span>
+                    <a
+                      href={job.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-zinc-300 hover:text-blue-500 dark:text-zinc-600 dark:hover:text-blue-400 transition-colors"
+                      title="Open on job board"
+                    >
+                      <svg
+                        className="w-3.5 h-3.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                        />
+                      </svg>
+                    </a>
                   </div>
                 </div>
               ))}

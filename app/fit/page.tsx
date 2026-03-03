@@ -1,15 +1,27 @@
-import JobCard, { Job } from "@/components/JobCard";
+import FitFilters from "@/components/FitFilters";
+import { Job } from "@/components/JobCard";
 import Navbar from "@/components/Navbar";
+import { getUserId } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
 export const revalidate = 0;
 
+export const metadata: Metadata = {
+  title: "Good Fit Jobs",
+};
+
 export default async function FitPage() {
+  const userId = await getUserId();
+  if (!userId) redirect("/login");
+
   const { data: jobs, error } = await supabase
     .from("jobs")
     .select("*")
     .eq("fit", true)
-    .order("fit_score", { ascending: false });
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -73,13 +85,7 @@ export default async function FitPage() {
           </div>
         )}
 
-        {jobs && jobs.length > 0 && (
-          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-            {(jobs as Job[]).map((job) => (
-              <JobCard key={job.id} job={job} />
-            ))}
-          </div>
-        )}
+        {jobs && jobs.length > 0 && <FitFilters jobs={jobs as Job[]} />}
       </main>
     </div>
   );

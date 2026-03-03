@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Automated Jobs Application App
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=OBGCNZgf6k0">
+    <img src="https://img.youtube.com/vi/OBGCNZgf6k0/maxresdefault.jpg" alt="automated jobs application" width="640"/>
+    <br>
+    <strong>Watch the full demo (click to play)</strong>
+  </a>
+</p>
+
+
+A Next.js app that scrapes job listings, scores them against your resume, and generates cover letters.
+
+## Features
+
+- **Scrape jobs** from JobsDB and CTgoodjobs by keyword
+- **AI scoring** — each job is scored 0–100 for fit against your resume
+- **Good Fit / Not Fit** — jobs are automatically categorised
+- **Cover letter generation** — copy or download as a formatted DOCX
+- **Resume management** — upload your resume (PDF/DOC/DOCX) from your profile
+
+## Tech Stack
+
+- [Next.js 16](https://nextjs.org/) — App Router, server components
+- [Supabase](https://supabase.com/) — database & file storage
+- [Tailwind CSS v4](https://tailwindcss.com/)
+- [docx](https://docx.js.org/) — client-side DOCX generation
 
 ## Getting Started
 
-First, run the development server:
+1. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+2. **Set environment variables** — create a `.env.local` file:
+   ```env
+   SUPABASE_URL=your_supabase_url
+   SUPABASE_SERVICE_KEY=your_service_role_key
+   ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+3. **Run the dev server**
+   ```bash
+   npm run dev
+   ```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+   Open [http://localhost:3000](http://localhost:3000).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Environment Variables
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Variable | Description |
+|---|---|
+| `SUPABASE_URL` | Your Supabase project URL |
+| `SUPABASE_SERVICE_KEY` | Supabase service role key (bypasses RLS) |

@@ -13,8 +13,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Jobs Dashboard",
+  title: {
+    default: "JobHunter",
+    template: "%s | JobHunter",
+  },
   description: "Automated jobs application tracker",
+  icons: {
+    icon: "/job-search.png",
+  },
 };
 
 export default function RootLayout({

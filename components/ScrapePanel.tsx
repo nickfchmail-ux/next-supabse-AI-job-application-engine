@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 
 type Phase = "idle" | "starting" | "polling" | "done" | "error";
 
-export default function ScrapePanel() {
+export default function ScrapePanel({ hasResume }: { hasResume: boolean }) {
   const router = useRouter();
   const [keyword, setKeyword] = useState("");
   const [pages, setPages] = useState(1);
@@ -23,6 +23,16 @@ export default function ScrapePanel() {
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
+
+  // Auto-refresh page when scrape completes
+  useEffect(() => {
+    if (phase === "done") {
+      refreshTransition(() => {
+        router.refresh();
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   // Cleanup poll on unmount
   useEffect(() => {
@@ -84,7 +94,6 @@ export default function ScrapePanel() {
 
   function handleRefresh() {
     refreshTransition(() => {
-      router.refresh();
       setPhase("idle");
       setLogs([]);
       setJobId(null);
@@ -117,7 +126,7 @@ export default function ScrapePanel() {
             Search Jobs
           </h2>
           <p className="text-xs text-zinc-400 dark:text-zinc-500">
-            Scrape &amp; analyse new listings from JobsDB
+            Scrape &amp; analyse new listings from JobsDB and CTgoodjobs
           </p>
         </div>
       </div>
@@ -168,7 +177,7 @@ export default function ScrapePanel() {
           <div className="sm:self-end">
             <button
               type="submit"
-              disabled={isRunning || !keyword.trim()}
+              disabled={isRunning || !keyword.trim() || !hasResume}
               className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm px-5 py-2.5 transition-colors"
             >
               {isRunning ? (
@@ -215,6 +224,19 @@ export default function ScrapePanel() {
             </button>
           </div>
         </div>
+
+        {/* No resume warning */}
+        {!hasResume && (
+          <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+            You need to upload your resume before searching for matches.{" "}
+            <a
+              href="/profile"
+              className="font-semibold underline underline-offset-2 hover:text-amber-700 dark:hover:text-amber-300 transition-colors"
+            >
+              Upload resume →
+            </a>
+          </p>
+        )}
       </form>
 
       {/* Status / Logs area */}
@@ -285,8 +307,7 @@ export default function ScrapePanel() {
               {phase === "starting" && "Starting scrape job…"}
               {phase === "polling" &&
                 `Scraping "${keyword}" · polling every 5s`}
-              {phase === "done" &&
-                "Scrape complete! Refresh to see the new jobs below."}
+              {phase === "done" && "Scrape complete! Refreshing results…"}
               {phase === "error" && errorMsg}
             </span>
 
@@ -332,10 +353,10 @@ export default function ScrapePanel() {
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                        d="M5 13l4 4L19 7"
                       />
                     </svg>
-                    Refresh
+                    Dismiss
                   </>
                 )}
               </button>

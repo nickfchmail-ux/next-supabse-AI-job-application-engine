@@ -10,6 +10,7 @@ export default function Navbar({ currentPath = "/" }: Props) {
     { href: "/", label: "Dashboard" },
     { href: "/fit", label: "Good Fit" },
     { href: "/not-fit", label: "Not Fit" },
+    { href: "/profile", label: "Profile" },
   ];
 
   return (
@@ -32,9 +33,7 @@ export default function Navbar({ currentPath = "/" }: Props) {
               />
             </svg>
           </div>
-          <span className="font-semibold text-sm text-zinc-800 dark:text-zinc-100 hidden sm:block">
-            Jobs Tracker
-          </span>
+
         </Link>
 
         {/* Nav links */}
