@@ -11,6 +11,8 @@
 
 A Next.js app that scrapes job listings, scores them against your resume, and generates cover letters.
 
+Developed with Claude Sonnet 4.6 in just 2 days (95% of codes was ai generated)
+
 ## Features
 
 - **Scrape jobs** from JobsDB and CTgoodjobs by keyword
