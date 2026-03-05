@@ -1,14 +1,7 @@
 "use server";
 
-import { cookies } from "next/headers";
-
-const BASE_URL =
-  "https://automated-jobs-application-app-production.up.railway.app";
-
-async function getToken(): Promise<string | null> {
-  const cookieStore = await cookies();
-  return cookieStore.get("token")?.value ?? null;
-}
+import { getToken } from "@/lib/auth";
+import { fetchWithAuth } from "@/lib/fetchWithAuth";
 
 export type StartScrapeResult =
   | { ok: true; jobId: string; pollUrl: string }
@@ -23,12 +16,9 @@ export async function startScrapeAction(
   if (!token) return { ok: false, error: "Not authenticated." };
 
   try {
-    const res = await fetch(`${BASE_URL}/scrape`, {
+    const res = await fetchWithAuth("/scrape", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ keyword, pages, force }),
     });
 
@@ -42,7 +32,7 @@ export async function startScrapeAction(
 
     const data = await res.json();
     return { ok: true, jobId: data.jobId, pollUrl: data.pollUrl ?? "" };
-  } catch (e) {
+  } catch {
     return { ok: false, error: "Could not reach scrape server." };
   }
 }
@@ -56,8 +46,7 @@ export async function pollJobAction(jobId: string): Promise<PollResult> {
   if (!token) return { ok: false, error: "Not authenticated." };
 
   try {
-    const res = await fetch(`${BASE_URL}/jobs/${jobId}`, {
-      headers: { Authorization: `Bearer ${token}` },
+    const res = await fetchWithAuth(`/jobs/${jobId}`, {
       cache: "no-store",
     });
 

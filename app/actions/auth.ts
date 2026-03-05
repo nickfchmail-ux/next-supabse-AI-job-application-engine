@@ -39,13 +39,17 @@ export async function loginAction(
 
   const data = await res.json();
   const cookieStore = await cookies();
-  cookieStore.set("token", data.access_token, {
+  const cookieOpts = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: "lax" as const,
     path: "/",
     maxAge: 60 * 60 * 24 * 7, // 7 days
-  });
+  };
+  cookieStore.set("token", data.access_token, cookieOpts);
+  if (data.refresh_token) {
+    cookieStore.set("refresh_token", data.refresh_token, cookieOpts);
+  }
 
   redirect("/");
 }
@@ -95,5 +99,6 @@ export async function signupAction(
 export async function logoutAction() {
   const cookieStore = await cookies();
   cookieStore.delete("token");
+  cookieStore.delete("refresh_token");
   redirect("/login");
 }
