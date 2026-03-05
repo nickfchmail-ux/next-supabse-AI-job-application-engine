@@ -1,3 +1,6 @@
+## Note
+> ~90% AI-written (Claude 4.6) — because the junior dev job market is rough enough without also hand-writing cover letters. 😂
+
 # AI powered Jobs Application Engine
 
 <p align="center">
@@ -53,5 +56,3 @@ A Next.js app that scrapes job listings, scores them against your resume, and ge
 | `SUPABASE_URL` | Your Supabase project URL |
 | `SUPABASE_SERVICE_KEY` | Supabase service role key (bypasses RLS) |
 
-## Note
-> ~90% AI-written (Claude 4.6) — because the junior dev job market is rough enough without also hand-writing cover letters. 😂
