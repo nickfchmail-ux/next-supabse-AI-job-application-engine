@@ -55,5 +55,5 @@ A Next.js app that scrapes job listings, scores them against your resume, and ge
 
 ## Note
 > For expriencing fast development,
-> 95% of the code in this project was written by AI spending 2 days (GitHub Copilot / Claude) with simple and modular guidances.
+> 95% of the code in this project was written by AI spending 2 days (GitHub Copilot / Claude) with simple and modular guidances and archetecture designed.
 

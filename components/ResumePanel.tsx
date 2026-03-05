@@ -161,7 +161,7 @@ export default function ResumePanel({ userId, fileName, signedUrl }: Props) {
             : "Accepted formats: PDF, DOC, DOCX"}
         </p>
 
-        {/* Drop zone */}
+        {/* Drop zone */}  
         <div
           onDragOver={(e) => {
             e.preventDefault();
