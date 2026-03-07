@@ -16,12 +16,14 @@ export default function ScrapePanel({ hasResume }: { hasResume: boolean }) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [isStarting, startTransition] = useTransition();
   const [isRefreshing, refreshTransition] = useTransition();
+  const logsContainerRef = useRef<HTMLDivElement>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-scroll logs
   useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = logsContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [logs]);
 
   // Auto-refresh page when scrape completes
@@ -365,7 +367,10 @@ export default function ScrapePanel({ hasResume }: { hasResume: boolean }) {
 
           {/* Logs */}
           {logs.length > 0 && (
-            <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-4 max-h-48 overflow-y-auto font-mono text-xs text-zinc-300 space-y-1">
+            <div
+              ref={logsContainerRef}
+              className="rounded-xl bg-zinc-950 border border-zinc-800 p-4 max-h-48 overflow-y-auto font-mono text-xs text-zinc-300 space-y-1"
+            >
               {logs.map((log, i) => (
                 <div key={i} className="flex gap-2">
                   <span className="text-zinc-600 select-none">
@@ -374,7 +379,6 @@ export default function ScrapePanel({ hasResume }: { hasResume: boolean }) {
                   <span>{log}</span>
                 </div>
               ))}
-              <div ref={logsEndRef} />
             </div>
           )}
         </div>

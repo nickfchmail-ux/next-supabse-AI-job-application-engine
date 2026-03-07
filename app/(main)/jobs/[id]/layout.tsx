@@ -318,7 +318,7 @@ export default async function JobDetailLayout({
                 {parsedSkills.map((skill, i) => (
                   <span
                     key={i}
-                    className="text-xs px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900"
+                    className="text-xs px-2.5 py-1 rounded-full  dark:bg-blue-950  dark:text-blue-300 text-gray-700  "
                   >
                     {skill}
                   </span>

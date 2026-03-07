@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 
 import AssignmentIndIcon from "@mui/icons-material/AssignmentInd";
 import SentimentSatisfiedAltIcon from "@mui/icons-material/SentimentSatisfiedAlt";
-import SentimentVeryDissatisfiedIcon from "@mui/icons-material/SentimentVeryDissatisfied";
 import SpaceDashboardIcon from "@mui/icons-material/SpaceDashboard";
 import Badge from "@mui/material/Badge";
 import BackButton from "./BackButton";
@@ -30,7 +29,7 @@ export default function Navbar({ currentPath = "/", fit, notFit }: Props) {
 
   return (
     <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-10 h-[max-content] ">
-      <div className="max-w-6xl mx-auto px-4 sm:px-8 h-14 flex items-center justify-between gap-4 h-full py-5">
+      <div className="max-w-6xl mx-auto px-4 sm:px-8 h-14 flex items-center justify-between gap-4 h-[max-content] py-5">
         {/* Brand */}
         <Link href="/" className="flex items-center gap-2 shrink-0">
           <div className={`mt-2 ml-2  w-min-[max-content]`}>
@@ -49,18 +48,16 @@ export default function Navbar({ currentPath = "/", fit, notFit }: Props) {
                 key={link.label}
                 icon={
                   shouldShowBadge ? (
-                    <Badge
-                      badgeContent={link.label === "Good Fit" ? fit : notFit}
-                      color="primary"
-                    >
-                      {link.label === "Good Fit" && (
-                        <SentimentSatisfiedAltIcon color="primary" />
-                      )}
-
-                      {link.label === "Not Fit" && (
-                        <SentimentVeryDissatisfiedIcon color="error" />
-                      )}
-                    </Badge>
+                    link.label === "Good Fit" && (
+                      <Badge
+                        badgeContent={link.label === "Good Fit" ? fit : notFit}
+                        color="primary"
+                      >
+                        {link.label === "Good Fit" && (
+                          <SentimentSatisfiedAltIcon color="primary" />
+                        )}
+                      </Badge>
+                    )
                   ) : link.label === "Dashboard" ? (
                     <SpaceDashboardIcon color="secondary" />
                   ) : (
