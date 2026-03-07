@@ -1,6 +1,7 @@
 "use client";
 
 import { pollJobAction, startScrapeAction } from "@/app/actions/scrape";
+import { parseScrapeLogs } from "@/lib/parseScrapeLogs";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
@@ -15,15 +16,28 @@ export default function ScrapePanel({ hasResume }: { hasResume: boolean }) {
   const [errorMsg, setErrorMsg] = useState("");
   const [jobId, setJobId] = useState<string | null>(null);
   const [isStarting, startTransition] = useTransition();
-  const [isRefreshing, refreshTransition] = useTransition();
+  const [showToast, setShowToast] = useState(false);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const stepsContainerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-refresh page when scrape completes
+  // Auto-scroll steps to bottom
+  useEffect(() => {
+    const el = stepsContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [logs]);
+
+  // Auto-refresh page when scrape completes and show toast
   useEffect(() => {
     if (phase === "done") {
-      refreshTransition(() => {
-        router.refresh();
-      });
+      router.refresh();
+      setShowToast(true);
+      const t = setTimeout(() => {
+        setShowToast(false);
+        setPhase("idle");
+        setLogs([]);
+        setJobId(null);
+      }, 4000);
+      return () => clearTimeout(t);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
@@ -83,14 +97,6 @@ export default function ScrapePanel({ hasResume }: { hasResume: boolean }) {
       setJobId(result.jobId);
       setPhase("polling");
       schedulePoll(result.jobId);
-    });
-  }
-
-  function handleRefresh() {
-    refreshTransition(() => {
-      setPhase("idle");
-      setLogs([]);
-      setJobId(null);
     });
   }
 
@@ -233,204 +239,237 @@ export default function ScrapePanel({ hasResume }: { hasResume: boolean }) {
         )}
       </form>
 
-      {/* Status / Logs area */}
-      {phase !== "idle" && (
-        <div className="px-6 pb-6 space-y-3">
-          {/* Status bar */}
-          <div
-            className={`flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium border ${
-              phase === "done"
-                ? "bg-emerald-50 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400"
-                : phase === "error"
-                  ? "bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800 text-red-700 dark:text-red-400"
-                  : "bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400"
-            }`}
+      {/* Toast */}
+      {showToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-emerald-600 text-white text-sm font-medium px-5 py-3.5 shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <svg
+            className="w-4 h-4 shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2.5}
           >
-            {phase === "done" && (
-              <svg
-                className="w-4 h-4 shrink-0"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            )}
-            {phase === "error" && (
-              <svg
-                className="w-4 h-4 shrink-0"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            )}
-            {(phase === "starting" || phase === "polling") && (
-              <svg
-                className="w-4 h-4 shrink-0 animate-spin"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                />
-              </svg>
-            )}
-            <span>
-              {phase === "starting" && "Starting scrape job…"}
-              {phase === "polling" &&
-                `Scraping "${keyword}" · polling every 5s`}
-              {phase === "done" && "Scrape complete! Refreshing results…"}
-              {phase === "error" && errorMsg}
-            </span>
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          Search complete! Results updated.
+        </div>
+      )}
 
-            {/* Refresh button — shown when done */}
-            {phase === "done" && (
-              <button
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                className="ml-auto flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-semibold px-3 py-1.5 transition-colors shrink-0"
-              >
-                {isRefreshing ? (
-                  <>
-                    <svg
-                      className="w-3 h-3 animate-spin"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                      />
-                    </svg>
-                    Refreshing…
-                  </>
-                ) : (
-                  <>
-                    <svg
-                      className="w-3 h-3"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                    Dismiss
-                  </>
-                )}
-              </button>
-            )}
-          </div>
+      {/* Status / Logs area */}
+      {phase !== "idle" && phase !== "done" && (
+        <div className="px-6 pb-6 space-y-3">
+          {/* Progress summary */}
+          {(logs.length > 0 || phase === "error") &&
+            (() => {
+              const s = parseScrapeLogs(logs);
+              return (
+                <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-4 space-y-3">
+                  {/* Current phase + progress bar */}
+                  {s.currentPhaseName && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-zinc-300">
+                          {s.currentPhaseName}
+                        </span>
+                        {s.progress && (
+                          <span className="text-xs text-zinc-500">
+                            {s.progress}
+                          </span>
+                        )}
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                          style={{
+                            width: (() => {
+                              if (s.currentPhase === 1) return "25%";
+                              if (s.currentPhase === 2 && s.enrichProgress)
+                                return `${25 + Math.round((s.enrichProgress.done / s.enrichProgress.total) * 25)}%`;
+                              if (s.currentPhase === 3 && s.analysisProgress)
+                                return `${50 + Math.round((s.analysisProgress.done / s.analysisProgress.total) * 25)}%`;
+                              if (s.currentPhase === 4) return "90%";
+                              return "10%";
+                            })(),
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
 
-          {/* Progress steps */}
-          {logs.length > 0 && (
-            <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-4 space-y-2">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-zinc-400">
-                  Progress
-                </span>
-                <span className="text-xs text-zinc-500">
-                  {logs.length} step{logs.length !== 1 ? "s" : ""} completed
-                </span>
-              </div>
-              <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-blue-500 transition-all duration-500"
-                  style={{
-                    width:
-                      phase === "done"
-                        ? "100%"
-                        : `${Math.min(90, logs.length * 10)}%`,
-                  }}
-                />
-              </div>
-              <div className="space-y-1 pt-1">
-                {logs.map((_, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <svg
-                      className="w-3 h-3 text-emerald-500 shrink-0"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2.5}
+                  {/* Quick stats */}
+                  {s.stats.scraped > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      <StatPill label="Found" value={s.stats.scraped} />
+                      {s.stats.duplicatesRemoved > 0 && (
+                        <StatPill
+                          label="Duplicates"
+                          value={s.stats.duplicatesRemoved}
+                          muted
+                        />
+                      )}
+                      {s.stats.alreadyProcessed > 0 && (
+                        <StatPill
+                          label="Already seen"
+                          value={s.stats.alreadyProcessed}
+                          muted
+                        />
+                      )}
+                      {s.stats.newJobs > 0 && (
+                        <StatPill
+                          label="New"
+                          value={s.stats.newJobs}
+                          highlight
+                        />
+                      )}
+                    </div>
+                  )}
+
+                  {/* Early stop notice */}
+                  {s.earlyStop && (
+                    <p className="text-xs text-amber-400">
+                      All results were already up to date — nothing new to
+                      process.
+                    </p>
+                  )}
+
+                  {/* Fit results */}
+                  {s.fitResults && (
+                    <div
+                      ref={stepsContainerRef}
+                      className="space-y-1.5 overflow-y-auto"
+                      style={{ maxHeight: "150px" }}
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                    <span className="text-xs text-zinc-400">
-                      Step {i + 1} completed
-                    </span>
-                  </div>
-                ))}
-                {phase === "polling" && (
-                  <div className="flex items-center gap-2">
-                    <svg
-                      className="w-3 h-3 text-blue-400 shrink-0 animate-spin"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                      />
-                    </svg>
-                    <span className="text-xs text-zinc-500 animate-pulse">
-                      Working…
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+                      <div className="flex items-center gap-3 pb-1">
+                        <span className="text-xs font-medium text-emerald-400">
+                          ✓ {s.fitResults.fit} match
+                          {s.fitResults.fit !== 1 ? "es" : ""}
+                        </span>
+                        <span className="text-xs text-zinc-500">
+                          {s.fitResults.noFit} not a fit
+                        </span>
+                      </div>
+                      {s.fitResults.fitJobs.map((job, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between gap-2"
+                        >
+                          <span className="text-xs text-zinc-300 truncate">
+                            {job.title}
+                            <span className="text-zinc-500">
+                              {" "}
+                              @ {job.company}
+                            </span>
+                          </span>
+                          <span className="text-xs font-semibold text-emerald-500 shrink-0">
+                            {job.score}
+                          </span>
+                        </div>
+                      ))}
+                      {phase === "polling" && s.analysisProgress && (
+                        <div className="flex items-center gap-2 pt-0.5">
+                          <svg
+                            className="w-3 h-3 text-blue-400 shrink-0 animate-spin"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                            />
+                          </svg>
+                          <span className="text-xs text-zinc-500 animate-pulse">
+                            Analysing…
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Errors */}
+                  {(s.errors.length > 0 || phase === "error") && (
+                    <div className="space-y-1">
+                      {phase === "error" && errorMsg && (
+                        <p className="text-xs text-red-400">{errorMsg}</p>
+                      )}
+                      {s.errors.map((e, i) => (
+                        <p key={i} className="text-xs text-red-400">
+                          {e}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Polling spinner (no fit results yet) */}
+                  {phase === "polling" && !s.fitResults && (
+                    <div className="flex items-center gap-2">
+                      <svg
+                        className="w-3 h-3 text-blue-400 shrink-0 animate-spin"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                        />
+                      </svg>
+                      <span className="text-xs text-zinc-500 animate-pulse">
+                        Working…
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
         </div>
       )}
     </div>
+  );
+}
+
+function StatPill({
+  label,
+  value,
+  muted,
+  highlight,
+}: {
+  label: string;
+  value: number;
+  muted?: boolean;
+  highlight?: boolean;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+        highlight
+          ? "bg-blue-900/60 text-blue-300"
+          : muted
+            ? "bg-zinc-800 text-zinc-500"
+            : "bg-zinc-800 text-zinc-300"
+      }`}
+    >
+      <span className="font-semibold">{value}</span> {label}
+    </span>
   );
 }
