@@ -26,6 +26,11 @@ export async function proxy(request: NextRequest) {
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
   const authenticated = token ? await isTokenValid(token) : false;
 
+  // Allow all /api routes without authentication
+  if (pathname.startsWith("/api")) {
+    return NextResponse.next();
+  }
+
   // Not authenticated → redirect to /login (and clear stale cookie if one exists)
   if (!authenticated && !isPublic) {
     const loginUrl = new URL("/login", request.url);
