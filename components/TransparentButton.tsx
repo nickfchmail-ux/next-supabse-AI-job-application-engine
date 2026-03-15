@@ -8,6 +8,7 @@ type TransparentButtonProps = {
   iconPosition?: "left" | "right";
   disabled?: boolean;
   isActive?: boolean;
+  noBorder?: boolean;
 };
 
 type colors = "blue" | "red" | "black" | "green";
@@ -21,6 +22,7 @@ export default function TransparentButton({
   iconPosition = "left",
   disabled = false,
   isActive = false,
+  noBorder = false,
 }: PropsWithChildren<TransparentButtonProps>) {
   const colorMap: Record<colors, string> = {
     blue: "border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/60",
@@ -49,7 +51,7 @@ export default function TransparentButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center gap-3 text-sm font-medium px-3 py-1.5 rounded-lg border transition-colors ${disabled ? "border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600" : colorStyle}`}
+      className={`flex items-center gap-3 text-sm font-medium px-3 py-1.5 rounded-lg ${noBorder ? "" : "border"} transition-colors ${disabled ? "border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600" : colorStyle}`}
     >
       {icon && iconPosition === "left" && (
         <span className="w-4 h-4 flex items-center justify-center shrink-0">

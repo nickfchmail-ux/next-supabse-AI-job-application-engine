@@ -1,4 +1,5 @@
 import Navbar from "@/components/Navbar";
+import ProviderManager from "@/components/ProviderManager";
 import { getUserId } from "@/lib/auth";
 import { getJobsMatch } from "@/lib/data-services";
 
@@ -16,7 +17,7 @@ export default async function MainLayout({
 
   if (jobs) {
     fit = jobs?.filter((j) => {
-      return j.fit === true && j.applied !== true;
+      return j.fit === true && j.applied !== true && j.interested_in !== false;
     }).length;
     notFit = jobs?.filter((j) => {
       return j.fit === false;
@@ -24,9 +25,9 @@ export default async function MainLayout({
   }
 
   return (
-    <>
+    <ProviderManager>
       <Navbar fit={fit} notFit={notFit} />
       {children}
-    </>
+    </ProviderManager>
   );
 }

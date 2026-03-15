@@ -27,4 +27,5 @@ export type job = {
   updated_at: string;
   search_key: string;
   applied: boolean;
+  interested_in: boolean | null;
 };

@@ -28,7 +28,8 @@ export default async function Home() {
       .from("jobs")
       .select("*", { count: "exact", head: true })
       .eq("fit", true)
-      .eq("user_id", userId),
+      .eq("user_id", userId)
+      .neq("interested_in", false),
     supabase
       .from("jobs")
       .select("*", { count: "exact", head: true })
@@ -38,7 +39,9 @@ export default async function Home() {
       .from("jobs")
       .select("*", { count: "exact", head: true })
       .eq("applied", true)
-      .eq("user_id", userId),
+      .eq("fit", true)
+      .eq("user_id", userId)
+      .neq("interested_in", false),
     supabase
       .from("jobs")
       .select("id, title, company, fit, fit_score, url, posted_date")
@@ -48,20 +51,25 @@ export default async function Home() {
     getResumeInfo(),
   ]);
   const hasResume = resumeInfo.ok && !!resumeInfo.fileName;
-  const total = (fitCount ?? 0) + (notFitCount ?? 0);
+  const total = fitCount ?? 0;
   const applied = appliedCount ?? 0;
   const pending = total - applied;
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       {/* Hero */}
-      <div className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
-        <div className="max-w-5xl mx-auto px-4 sm:px-8 py-12">
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-            Jobs Hunter
+      <div className="bg-indigo-600 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+        <div className="max-w-5xl mx-auto px-4 sm:px-8 py-12 bg-indigo-600">
+          <h1 className="text-3xl font-bold text-rose-500 dark:text-zinc-50 ">
+            JobSeek
+            <strong className="text-sm font-light text-violet-100 font-serif ml-2">
+              powered by AI
+            </strong>
           </h1>
-          <p className="mt-2 text-zinc-500 dark:text-zinc-400">
-            {total} job{total !== 1 ? "s" : ""} scraped and analysed by AI
+          <p className="mt-2 text-amber-500 dark:text-zinc-400">
+            <strong className={`text-fuchsia-200`}>{total}</strong> job
+            {total !== 1 ? "s" : ""} match
+            {total !== 1 ? "" : "es"}{" "}
           </p>
         </div>
       </div>

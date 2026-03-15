@@ -28,6 +28,7 @@ export type Job = {
   search_key: string | null;
   created_at: string;
   applied?: boolean | null;
+  interested_in?: boolean | null;
 };
 
 type JobSource = {
@@ -157,6 +158,15 @@ export default function JobCard({ job }: { job: Job }) {
                   {formatSearchKey(job.search_key)}
                 </span>
               )}
+              <span
+                className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border ${
+                  job.applied
+                    ? "bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
+                    : "bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
+                }`}
+              >
+                {job.applied ? "Applied" : "Not Applied"}
+              </span>
             </div>
             <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50 group-hover:text-blue-600 dark:group-hover:text-blue-400 leading-snug line-clamp-2 transition-colors">
               {job.title}
