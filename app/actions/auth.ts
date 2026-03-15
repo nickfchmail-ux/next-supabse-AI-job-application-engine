@@ -1,10 +1,8 @@
 "use server";
 
+import { BACKEND_URL } from "@/lib/fetchWithAuth";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-
-const BASE_URL =
-  "https://automated-jobs-application-app-production.up.railway.app";
 
 export type AuthState = {
   error?: string;
@@ -23,7 +21,7 @@ export async function loginAction(
 
   let res: Response;
   try {
-    res = await fetch(`${BASE_URL}/auth/login`, {
+    res = await fetch(`${BACKEND_URL}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -76,7 +74,7 @@ export async function signupAction(
 
   let res: Response;
   try {
-    res = await fetch(`${BASE_URL}/auth/register`, {
+    res = await fetch(`${BACKEND_URL}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -96,7 +94,7 @@ export async function signupAction(
   // Registration succeeded — now log in to obtain tokens
   let loginRes: Response;
   try {
-    loginRes = await fetch(`${BASE_URL}/auth/login`, {
+    loginRes = await fetch(`${BACKEND_URL}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
