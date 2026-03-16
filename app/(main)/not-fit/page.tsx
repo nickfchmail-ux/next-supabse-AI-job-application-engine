@@ -1,11 +1,25 @@
-import InfiniteJobList from "@/components/InfiniteJobList";
+import FitFilters from "@/components/FitFilters";
+import { getUserId } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+
+export const revalidate = 0;
 
 export const metadata: Metadata = {
   title: "Not Fit Jobs",
 };
 
-export default function NotFitPage() {
+export default async function NotFitPage() {
+  const userId = await getUserId();
+  if (!userId) redirect("/login");
+
+  const { data: jobs } = await supabase
+    .from("jobs")
+    .select("*")
+    .eq("fit", false)
+    .eq("user_id", userId);
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <div className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
@@ -37,9 +51,8 @@ export default function NotFitPage() {
       </div>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-8 py-8">
-        <InfiniteJobList
-          queryKey="not-fit-jobs"
-          apiUrl="/api/jobs/not-fit"
+        <FitFilters
+          jobs={jobs ?? []}
           emptyMessage="No unfit jobs found"
         />
       </main>

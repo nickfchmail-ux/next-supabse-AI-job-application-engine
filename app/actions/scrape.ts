@@ -2,15 +2,27 @@
 
 import { getToken } from "@/lib/auth";
 import { fetchWithAuth } from "@/lib/fetchWithAuth";
+import type {
+  JobStatus,
+  PollProgress,
+  PollResultData,
+} from "@/types/api";
+
+// ── Start scrape ─────────────────────────────────────────────────
 
 export type StartScrapeResult =
   | { ok: true; jobId: string; pollUrl: string }
   | { ok: false; error: string };
 
+export interface StartScrapeParams {
+  keyword: string;
+  pages?: number;
+  force?: boolean;
+  boards?: string[];
+}
+
 export async function startScrapeAction(
-  keyword: string,
-  pages: number,
-  force: boolean = false,
+  params: StartScrapeParams,
 ): Promise<StartScrapeResult> {
   const token = await getToken();
   if (!token) return { ok: false, error: "Not authenticated." };
@@ -19,7 +31,12 @@ export async function startScrapeAction(
     const res = await fetchWithAuth("/scrape", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ keyword, pages, force }),
+      body: JSON.stringify({
+        keyword: params.keyword,
+        pages: params.pages ?? 1,
+        force: params.force ?? false,
+        boards: params.boards,
+      }),
     });
 
     if (!res.ok) {
@@ -37,8 +54,17 @@ export async function startScrapeAction(
   }
 }
 
+// ── Poll job ─────────────────────────────────────────────────────
+
 export type PollResult =
-  | { ok: true; status: string; logs: string[]; result?: unknown }
+  | {
+      ok: true;
+      status: JobStatus;
+      logs: string[];
+      progress?: PollProgress;
+      result?: PollResultData;
+      error?: string;
+    }
   | { ok: false; error: string };
 
 export async function pollJobAction(jobId: string): Promise<PollResult> {
@@ -63,7 +89,9 @@ export async function pollJobAction(jobId: string): Promise<PollResult> {
       ok: true,
       status: data.status,
       logs: data.logs ?? [],
+      progress: data.progress,
       result: data.result,
+      error: data.error,
     };
   } catch {
     return { ok: false, error: "Could not reach scrape server." };

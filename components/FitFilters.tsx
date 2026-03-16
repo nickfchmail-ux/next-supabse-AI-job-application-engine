@@ -1,6 +1,7 @@
 "use client";
 
 import JobCard, { Job } from "@/components/JobCard";
+import { computeActualPostedTimestamp } from "@/lib/dateUtils";
 import { useMemo, useState } from "react";
 
 function detectSourceName(url: string): string {
@@ -74,26 +75,42 @@ const SOURCE_COLORS: Record<string, string> = {
   Other: "bg-zinc-600 text-white",
 };
 
-export default function FitFilters({ jobs }: { jobs: Job[] }) {
+interface FitFiltersProps {
+  jobs: Job[];
+  emptyMessage: string;
+  emptyIcon?: React.ReactNode;
+}
+
+export default function FitFilters({ jobs, emptyMessage, emptyIcon }: FitFiltersProps) {
   const [sourceFilter, setSourceFilter] = useState("All");
   const [keyFilter, setKeyFilter] = useState("All");
   const [appliedFilter, setAppliedFilter] = useState("All");
 
-  const sources = useMemo(
-    () => [...new Set(jobs.map((j) => detectSourceName(j.url)))].sort(),
+  const sorted = useMemo(
+    () =>
+      [...jobs].sort(
+        (a, b) =>
+          computeActualPostedTimestamp(b.posted_date, b.scraped_date) -
+          computeActualPostedTimestamp(a.posted_date, a.scraped_date),
+      ),
     [jobs],
+  );
+
+  const sources = useMemo(
+    () => [...new Set(sorted.map((j) => detectSourceName(j.url)))].sort(),
+    [sorted],
   );
 
   const searchKeys = useMemo(
     () =>
-      [...new Set(jobs.map((j) => j.search_key ?? "Unknown"))]
+      [...new Set(sorted.map((j) => j.search_key ?? "Unknown"))]
         .sort()
         .map((k) => formatKey(k)),
-    [jobs],
+    [sorted],
   );
 
   const filtered = useMemo(() => {
-    return jobs.filter((job) => {
+    return sorted.filter((job) => {
       const matchSource =
         sourceFilter === "All" || detectSourceName(job.url) === sourceFilter;
       const matchKey =
@@ -105,7 +122,30 @@ export default function FitFilters({ jobs }: { jobs: Job[] }) {
         (appliedFilter === "Not Applied" && !job.applied);
       return matchApplied && matchSource && matchKey;
     });
-  }, [jobs, sourceFilter, keyFilter, appliedFilter]);
+  }, [sorted, sourceFilter, keyFilter, appliedFilter]);
+
+  if (jobs.length === 0) {
+    return (
+      <div className="text-center py-20 text-zinc-400 dark:text-zinc-500">
+        {emptyIcon ?? (
+          <svg
+            className="w-12 h-12 mx-auto mb-3 opacity-40"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+        )}
+        <p className="text-lg font-medium">{emptyMessage}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

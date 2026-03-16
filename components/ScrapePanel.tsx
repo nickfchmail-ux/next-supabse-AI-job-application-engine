@@ -86,7 +86,7 @@ export default function ScrapePanel({ hasResume }: { hasResume: boolean }) {
     if (pollRef.current) clearTimeout(pollRef.current);
 
     startTransition(async () => {
-      const result = await startScrapeAction(keyword.trim(), pages);
+      const result = await startScrapeAction({ keyword: keyword.trim(), pages });
 
       if (!result.ok) {
         setPhase("error");
