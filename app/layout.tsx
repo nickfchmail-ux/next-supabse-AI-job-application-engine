@@ -14,10 +14,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "JobHunter",
-    template: "%s | JobHunter",
+    default: "JobSeek",
+    template: "%s | JobSeek",
   },
-  description: "Automated jobs application tracker",
+  description: "Smart Careers, Simplified by AI.",
   icons: {
     icon: "/job-search.png",
   },

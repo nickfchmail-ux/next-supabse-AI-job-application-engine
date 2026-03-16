@@ -14,6 +14,7 @@ export default function BackButton({}: PropsWithChildren<BackButtonProps>) {
       title="back"
       color="black"
       icon={<ArrowBackIosNewIcon />}
+      noBorder={true}
       onClick={() => router.back()}
     />
   );

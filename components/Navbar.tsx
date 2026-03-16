@@ -64,7 +64,7 @@ export default function Navbar({ currentPath = "/", fit, notFit }: Props) {
           key={link.label}
           icon={getLinkIcon(link.label)}
           isActive={isActive}
-          iconPosition={shouldShowBadge ? "right" : "left"}
+          iconPosition={"left"}
           title={link.label}
           noBorder={noBorder}
           onClick={() => {
@@ -144,7 +144,7 @@ export default function Navbar({ currentPath = "/", fit, notFit }: Props) {
         <div className="px-4 py-4 space-y-2 bg-white dark:bg-zinc-900">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-              Navigation
+              Options
             </span>
             <IconButton
               onClick={() => setDrawerOpen(false)}

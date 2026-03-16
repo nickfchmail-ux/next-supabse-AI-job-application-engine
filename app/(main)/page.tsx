@@ -4,6 +4,7 @@ import { getUserId } from "@/lib/auth";
 import { formatDate } from "@/lib/dateUtils";
 import { supabase } from "@/lib/supabase";
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -58,15 +59,17 @@ export default async function Home() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       {/* Hero */}
-      <div className="bg-indigo-600 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
-        <div className="max-w-5xl mx-auto px-4 sm:px-8 py-12 bg-indigo-600">
-          <h1 className="text-3xl font-bold text-rose-500 dark:text-zinc-50 ">
-            JobSeek
-            <strong className="text-sm font-light text-violet-100 font-serif ml-2">
-              powered by AI
-            </strong>
-          </h1>
-          <p className="mt-2 text-amber-500 dark:text-zinc-400">
+      <div className="bg-indigo-800 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+        <div className="flex flex-col max-w-5xl mx-auto px-4 sm:px-8 py-12 bg-indigo-800 items-center justify-center">
+          <Image
+            src="/JobSeek.png"
+            alt="JobSeek"
+            width={360}
+            height={200}
+            priority
+          />
+
+          <p className="flex self-start gap-2 mt-2 text-amber-500 dark:text-zinc-400">
             <strong className={`text-fuchsia-200`}>{total}</strong> job
             {total !== 1 ? "s" : ""} match
             {total !== 1 ? "" : "es"}{" "}

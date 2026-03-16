@@ -1,6 +1,7 @@
 "use client";
 
 import { loginAction } from "@/app/actions/auth";
+import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useActionState } from "react";
@@ -11,33 +12,22 @@ function LoginForm() {
   const justRegistered = searchParams.get("registered") === "1";
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-blue-950 dark:bg-zinc-950 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         {/* Logo / Brand */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600 mb-4 shadow-lg">
-            <svg
-              className="w-7 h-7 text-white"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-              />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-            Welcome back
-          </h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Sign in to view your job matches
-          </p>
+        <div className="text-center mb-2 h-[250px]">
+          <Image
+            src="/JobSeek.png"
+            alt="JobSeek"
+            width={540}
+            height={200}
+            className="mb-2 mx-auto"
+            priority
+          />
         </div>
-
+        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400 text-center mb-5">
+          Sign in to view your job matches
+        </p>
         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-8">
           {/* Success banner */}
           {justRegistered && (
