@@ -63,6 +63,15 @@ function detectSource(url: string): JobSource {
       bgColor: "bg-orange-50 dark:bg-orange-950",
       borderColor: "border-orange-200 dark:border-orange-800",
     };
+
+     if (url.includes("linkedin.com"))
+       return {
+         name: "LinkedIn",
+         shortName: "LinkedIn",
+         color: "text-orange-700 dark:text-orange-300",
+         bgColor: "bg-orange-50 dark:bg-orange-950",
+         borderColor: "border-orange-200 dark:border-orange-800",
+       };
   return {
     name: "Job Board",
     shortName: "Job Board",

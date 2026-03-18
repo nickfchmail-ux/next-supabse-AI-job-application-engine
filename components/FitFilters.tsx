@@ -8,6 +8,7 @@ function detectSourceName(url: string): string {
   if (url.includes("jobsdb.com")) return "JobsDB";
   if (url.includes("indeed.com")) return "Indeed";
   if (url.includes("ctgoodjobs.hk")) return "CTgoodjobs";
+  if (url.includes("linkedin.com")) return "LinkedIn";
   return "Other";
 }
 

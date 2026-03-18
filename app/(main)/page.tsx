@@ -64,8 +64,8 @@ export default async function Home() {
           <Image
             src="/JobSeek.png"
             alt="JobSeek"
-            width={360}
-            height={200}
+            width={550}
+            height={150}
             priority
           />
 
