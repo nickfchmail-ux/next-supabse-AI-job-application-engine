@@ -34,16 +34,26 @@ export default async function DetailsPage({
       ? JSON.parse(job.benefits)
       : (job.benefits ?? []);
 
+  const hasStructuredContent =
+    job.short_description ||
+    parsedResponsibilities.length > 0 ||
+    parsedRequirements.length > 0 ||
+    parsedBenefits.length > 0;
+
   return (
     <div className="flex flex-col gap-8 overflow-y-scroll max-h-[500px] scroll-smooth">
-      {job.short_description && (
+      {hasStructuredContent ? (
         <section className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6">
-          <SectionHeading className="sticky top-0 bg-white dark:bg-zinc-900 py-1 -mx-6 px-6 z-10">
-            Job Summary
-          </SectionHeading>
-          <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
-            {job.short_description}
-          </p>
+          {job.short_description && (
+            <>
+              <SectionHeading className="sticky top-0 bg-white dark:bg-zinc-900 py-1 -mx-6 px-6 z-10">
+                Job Summary
+              </SectionHeading>
+              <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                {job.short_description}
+              </p>
+            </>
+          )}
 
           {parsedResponsibilities.length > 0 && (
             <>
@@ -92,6 +102,19 @@ export default async function DetailsPage({
             </>
           )}
         </section>
+      ) : job.raw_description ? (
+        <section className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6">
+          <SectionHeading className="sticky top-0 bg-white dark:bg-zinc-900 py-1 -mx-6 px-6 z-10">
+            Job Description
+          </SectionHeading>
+          <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
+            {job.raw_description}
+          </p>
+        </section>
+      ) : (
+        <p className="text-sm text-zinc-400 dark:text-zinc-600">
+          No details available for this job.
+        </p>
       )}
     </div>
   );

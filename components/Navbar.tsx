@@ -77,8 +77,12 @@ export default function Navbar({ currentPath = "/", fit, notFit }: Props) {
   }
 
   const signOutButton = (
-    <form action={logoutAction}>
-      <button
+    <form
+      action={async () => {
+        await logoutAction();
+        router.push("/login");
+      }}
+    >      <button
         type="submit"
         className="flex items-center gap-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors px-2 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950"
       >
