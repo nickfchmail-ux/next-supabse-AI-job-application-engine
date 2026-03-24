@@ -28,6 +28,8 @@ export async function startScrapeAction(
   if (!token) return { ok: false, error: "Not authenticated." };
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120_000);
     const res = await fetchWithAuth("/scrape", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -37,7 +39,9 @@ export async function startScrapeAction(
         force: params.force ?? false,
         boards: params.boards,
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
@@ -49,7 +53,10 @@ export async function startScrapeAction(
 
     const data = await res.json();
     return { ok: true, jobId: data.jobId, pollUrl: data.pollUrl ?? "" };
-  } catch {
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      return { ok: false, error: "Request timed out. The server took too long to respond." };
+    }
     return { ok: false, error: "Could not reach scrape server." };
   }
 }
@@ -72,9 +79,13 @@ export async function pollJobAction(jobId: string): Promise<PollResult> {
   if (!token) return { ok: false, error: "Not authenticated." };
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
     const res = await fetchWithAuth(`/jobs/${jobId}`, {
       cache: "no-store",
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
@@ -93,7 +104,10 @@ export async function pollJobAction(jobId: string): Promise<PollResult> {
       result: data.result,
       error: data.error,
     };
-  } catch {
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      return { ok: false, error: "Poll request timed out." };
+    }
     return { ok: false, error: "Could not reach scrape server." };
   }
 }

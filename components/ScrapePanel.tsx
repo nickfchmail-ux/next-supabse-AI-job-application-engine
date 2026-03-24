@@ -2,19 +2,27 @@
 
 import { pollJobAction, startScrapeAction } from "@/app/actions/scrape";
 import { parseScrapeLogs } from "@/lib/parseScrapeLogs";
+import {
+  scrapeStarted,
+  scrapePolling,
+  scrapeLogsUpdated,
+  scrapeDone,
+  scrapeError,
+  scrapeReset,
+} from "@/state/global/slice/scrapeSlice";
+import type { RootState } from "@/state/global/store";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
-
-type Phase = "idle" | "starting" | "polling" | "done" | "error";
+import { useDispatch, useSelector } from "react-redux";
 
 export default function ScrapePanel({ hasResume }: { hasResume: boolean }) {
   const router = useRouter();
+  const dispatch = useDispatch();
+  const { phase, jobId, logs, errorMsg } = useSelector(
+    (s: RootState) => s.scrape,
+  );
   const [keyword, setKeyword] = useState("");
   const [pages, setPages] = useState(1);
-  const [phase, setPhase] = useState<Phase>("idle");
-  const [logs, setLogs] = useState<string[]>([]);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [jobId, setJobId] = useState<string | null>(null);
   const [isStarting, startTransition] = useTransition();
   const [showToast, setShowToast] = useState(false);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
@@ -33,41 +41,55 @@ export default function ScrapePanel({ hasResume }: { hasResume: boolean }) {
       setShowToast(true);
       const t = setTimeout(() => {
         setShowToast(false);
-        setPhase("idle");
-        setLogs([]);
-        setJobId(null);
+        dispatch(scrapeReset());
       }, 4000);
       return () => clearTimeout(t);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  // Cleanup poll on unmount
+  // Cleanup poll on unmount (timer only — state stays in Redux)
   useEffect(() => {
     return () => {
       if (pollRef.current) clearTimeout(pollRef.current);
     };
   }, []);
 
+  // Resume polling when component remounts with an active job
+  useEffect(() => {
+    if (phase === "polling" && jobId && !pollRef.current) {
+      pollFailCount.current = 0;
+      schedulePoll(jobId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const pollFailCount = useRef(0);
+
   function schedulePoll(id: string) {
     pollRef.current = setTimeout(async () => {
       const result = await pollJobAction(id);
 
       if (!result.ok) {
-        setPhase("error");
-        setErrorMsg(result.error);
+        pollFailCount.current++;
+        if (pollFailCount.current >= 3) {
+          dispatch(scrapeError(result.error));
+          return;
+        }
+        // Transient failure — retry with backoff
+        schedulePoll(id);
         return;
       }
 
-      setLogs(result.logs);
+      pollFailCount.current = 0;
+      dispatch(scrapeLogsUpdated(result.logs));
 
       if (result.status === "done") {
-        setPhase("done");
+        dispatch(scrapeDone());
         return;
       }
       if (result.status === "error") {
-        setPhase("error");
-        setErrorMsg("Scrape job failed on the server.");
+        dispatch(scrapeError("Scrape job failed on the server."));
         return;
       }
 
@@ -79,23 +101,18 @@ export default function ScrapePanel({ hasResume }: { hasResume: boolean }) {
     e.preventDefault();
     if (!keyword.trim()) return;
 
-    setPhase("starting");
-    setLogs([]);
-    setErrorMsg("");
-    setJobId(null);
+    dispatch(scrapeStarted());
     if (pollRef.current) clearTimeout(pollRef.current);
 
     startTransition(async () => {
       const result = await startScrapeAction({ keyword: keyword.trim(), pages });
 
       if (!result.ok) {
-        setPhase("error");
-        setErrorMsg(result.error);
+        dispatch(scrapeError(result.error));
         return;
       }
 
-      setJobId(result.jobId);
-      setPhase("polling");
+      dispatch(scrapePolling(result.jobId));
       schedulePoll(result.jobId);
     });
   }
