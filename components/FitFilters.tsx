@@ -92,7 +92,7 @@ export default function FitFilters({ jobs, emptyMessage, emptyIcon }: FitFilters
   const router = useRouter();
   const [sourceFilter, setSourceFilter] = useState("All");
   const [keyFilter, setKeyFilter] = useState("All");
-  const [appliedFilter, setAppliedFilter] = useState("All");
+  const [appliedFilter, setAppliedFilter] = useState("Not Applied");
   const [viewMode, setViewMode] = useState<"table" | "card">(() =>
     typeof window !== "undefined" && window.innerWidth < 768 ? "card" : "table"
   );
