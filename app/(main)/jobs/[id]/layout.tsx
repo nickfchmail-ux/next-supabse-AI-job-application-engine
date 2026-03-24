@@ -80,6 +80,14 @@ function detectSource(url: string): JobSource {
       bgColor: "bg-teal-50 dark:bg-teal-950",
       borderColor: "border-teal-200 dark:border-teal-800",
     };
+  if (url.includes("glassdoor.com"))
+    return {
+      name: "Glassdoor",
+      shortName: "Glassdoor",
+      color: "text-green-700 dark:text-green-300",
+      bgColor: "bg-green-50 dark:bg-green-950",
+      borderColor: "border-green-200 dark:border-green-800",
+    };
   return {
     name: "Job Board",
     shortName: "Job Board",

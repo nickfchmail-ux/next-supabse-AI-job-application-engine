@@ -12,6 +12,7 @@ function detectSourceName(url: string): string {
   if (url.includes("ctgoodjobs.hk")) return "CTgoodjobs";
   if (url.includes("linkedin.com")) return "LinkedIn";
   if (url.includes("offertoday.com")) return "OfferToday";
+  if (url.includes("glassdoor.com")) return "Glassdoor";
   return "Other";
 }
 
@@ -77,6 +78,7 @@ const SOURCE_COLORS: Record<string, string> = {
   Indeed: "bg-sky-600 text-white dark:bg-sky-500",
   CTgoodjobs: "bg-orange-500 text-white",
   OfferToday: "bg-teal-600 text-white dark:bg-teal-500",
+  Glassdoor: "bg-green-600 text-white dark:bg-green-500",
   Other: "bg-zinc-600 text-white",
 };
 
@@ -259,17 +261,17 @@ export default function FitFilters({ jobs, emptyMessage, emptyIcon }: FitFilters
           ))}
         </div>
       ) : (
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-sm">
-          <table className="w-full text-sm">
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-x-auto shadow-sm">
+          <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
                 <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">Title</th>
-                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400 hidden sm:table-cell">Company</th>
-                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400 hidden md:table-cell">Location</th>
+                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">Company</th>
+                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">Location</th>
                 <th className="text-center px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">Score</th>
                 <th className="text-center px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">Applied</th>
-                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400 hidden lg:table-cell">Applied On</th>
-                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400 hidden lg:table-cell">Posted</th>
+                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">Applied On</th>
+                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">Posted</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -280,8 +282,8 @@ export default function FitFilters({ jobs, emptyMessage, emptyIcon }: FitFilters
                       {job.title}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400 hidden sm:table-cell">{job.company}</td>
-                  <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500 hidden md:table-cell truncate max-w-50">{job.location}</td>
+                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{job.company}</td>
+                  <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500 truncate max-w-50">{job.location}</td>
                   <td className="px-4 py-3 text-center">
                     {job.fit_score !== null && (
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
@@ -304,10 +306,10 @@ export default function FitFilters({ jobs, emptyMessage, emptyIcon }: FitFilters
                       {job.applied ? "Yes" : "No"}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500 hidden lg:table-cell whitespace-nowrap">
+                  <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500 whitespace-nowrap">
                     {job.applied_on ? formatDate(job.applied_on) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500 hidden lg:table-cell whitespace-nowrap">
+                  <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500 whitespace-nowrap">
                     {formatDate(job.posted_date)}
                   </td>
                 </tr>
