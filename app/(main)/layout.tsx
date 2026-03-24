@@ -1,7 +1,7 @@
 import Navbar from "@/components/Navbar";
 import ProviderManager from "@/components/ProviderManager";
 import { getUserId } from "@/lib/auth";
-import { getJobsMatch } from "@/lib/data-services";
+import { supabase } from "@/lib/supabase";
 
 export default async function MainLayout({
   children,
@@ -10,18 +10,26 @@ export default async function MainLayout({
 }) {
   const userId = await getUserId();
 
-  const jobs = await getJobsMatch();
-
   let fit = 0;
   let notFit = 0;
 
-  if (jobs) {
-    fit = jobs?.filter((j) => {
-      return j.fit === true && j.applied !== true && j.interested_in !== false;
-    }).length;
-    notFit = jobs?.filter((j) => {
-      return j.fit === false;
-    }).length;
+  if (userId) {
+    const [{ count: fitCount }, { count: notFitCount }] = await Promise.all([
+      supabase
+        .from("jobs")
+        .select("*", { count: "exact", head: true })
+        .eq("fit", true)
+        .eq("user_id", userId)
+        .or("applied.is.null,applied.eq.false")
+        .or("interested_in.is.null,interested_in.eq.true"),
+      supabase
+        .from("jobs")
+        .select("*", { count: "exact", head: true })
+        .eq("fit", false)
+        .eq("user_id", userId),
+    ]);
+    fit = fitCount ?? 0;
+    notFit = notFitCount ?? 0;
   }
 
   return (

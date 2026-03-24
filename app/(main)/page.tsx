@@ -30,7 +30,7 @@ export default async function Home() {
       .select("*", { count: "exact", head: true })
       .eq("fit", true)
       .eq("user_id", userId)
-      .neq("interested_in", false),
+      .or("interested_in.is.null,interested_in.eq.true"),
     supabase
       .from("jobs")
       .select("*", { count: "exact", head: true })
@@ -42,7 +42,7 @@ export default async function Home() {
       .eq("applied", true)
       .eq("fit", true)
       .eq("user_id", userId)
-      .neq("interested_in", false),
+      .or("interested_in.is.null,interested_in.eq.true"),
     supabase
       .from("jobs")
       .select("id, title, company, fit, fit_score, url, posted_date")

@@ -19,7 +19,7 @@ export default async function FitPage() {
     .select("*")
     .eq("fit", true)
     .eq("user_id", userId)
-    .neq("interested_in", false);
+    .or("interested_in.is.null,interested_in.eq.true");
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">

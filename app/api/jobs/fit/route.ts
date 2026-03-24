@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     .select("*")
     .eq("fit", true)
     .eq("user_id", userId)
-    .neq("interested_in", false);
+    .or("interested_in.is.null,interested_in.eq.true");
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

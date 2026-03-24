@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   },
   description: "Smart Careers, Simplified by AI.",
   icons: {
-    icon: "/job-search.png",
+    icon: "/JobSeek.png",
   },
 };
 

@@ -8,6 +8,7 @@ function detectSourceName(url: string): string {
   if (url.includes("jobsdb.com")) return "JobsDB";
   if (url.includes("indeed.com")) return "Indeed";
   if (url.includes("ctgoodjobs.hk")) return "CTgoodjobs";
+  if (url.includes("offertoday.com")) return "OfferToday";
   return "Other";
 }
 
@@ -72,6 +73,7 @@ const SOURCE_COLORS: Record<string, string> = {
   JobsDB: "bg-purple-600 text-white dark:bg-purple-500",
   Indeed: "bg-sky-600 text-white dark:bg-sky-500",
   CTgoodjobs: "bg-orange-500 text-white",
+  OfferToday: "bg-teal-600 text-white dark:bg-teal-500",
   Other: "bg-zinc-600 text-white",
 };
 

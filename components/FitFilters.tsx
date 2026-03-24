@@ -1,7 +1,9 @@
 "use client";
 
 import JobCard, { Job } from "@/components/JobCard";
-import { computeActualPostedTimestamp } from "@/lib/dateUtils";
+import { computeActualPostedTimestamp, formatDate } from "@/lib/dateUtils";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 function detectSourceName(url: string): string {
@@ -9,6 +11,7 @@ function detectSourceName(url: string): string {
   if (url.includes("indeed.com")) return "Indeed";
   if (url.includes("ctgoodjobs.hk")) return "CTgoodjobs";
   if (url.includes("linkedin.com")) return "LinkedIn";
+  if (url.includes("offertoday.com")) return "OfferToday";
   return "Other";
 }
 
@@ -73,6 +76,7 @@ const SOURCE_COLORS: Record<string, string> = {
   JobsDB: "bg-purple-600 text-white dark:bg-purple-500",
   Indeed: "bg-sky-600 text-white dark:bg-sky-500",
   CTgoodjobs: "bg-orange-500 text-white",
+  OfferToday: "bg-teal-600 text-white dark:bg-teal-500",
   Other: "bg-zinc-600 text-white",
 };
 
@@ -83,9 +87,13 @@ interface FitFiltersProps {
 }
 
 export default function FitFilters({ jobs, emptyMessage, emptyIcon }: FitFiltersProps) {
+  const router = useRouter();
   const [sourceFilter, setSourceFilter] = useState("All");
   const [keyFilter, setKeyFilter] = useState("All");
   const [appliedFilter, setAppliedFilter] = useState("All");
+  const [viewMode, setViewMode] = useState<"table" | "card">(() =>
+    typeof window !== "undefined" && window.innerWidth < 768 ? "card" : "table"
+  );
 
   const sorted = useMemo(
     () =>
@@ -180,30 +188,52 @@ export default function FitFilters({ jobs, emptyMessage, emptyIcon }: FitFilters
         />
       </div>
 
-      {/* Result count */}
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        Showing{" "}
-        <span className="font-semibold text-zinc-700 dark:text-zinc-300">
-          {filtered.length}
-        </span>{" "}
-        of{" "}
-        <span className="font-semibold text-zinc-700 dark:text-zinc-300">
-          {jobs.length}
-        </span>{" "}
-        job{jobs.length !== 1 ? "s" : ""}
-        {sourceFilter !== "All" && (
-          <span className="ml-1">
-            from <strong>{sourceFilter}</strong>
-          </span>
-        )}
-        {keyFilter !== "All" && (
-          <span className="ml-1">
-            · search key <strong>{keyFilter}</strong>
-          </span>
-        )}
-      </p>
+      {/* Result count + view toggle */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          Showing{" "}
+          <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+            {filtered.length}
+          </span>{" "}
+          of{" "}
+          <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+            {jobs.length}
+          </span>{" "}
+          job{jobs.length !== 1 ? "s" : ""}
+          {sourceFilter !== "All" && (
+            <span className="ml-1">
+              from <strong>{sourceFilter}</strong>
+            </span>
+          )}
+          {keyFilter !== "All" && (
+            <span className="ml-1">
+              · search key <strong>{keyFilter}</strong>
+            </span>
+          )}
+        </p>
+        <div className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-700 p-0.5">
+          <button
+            onClick={() => setViewMode("table")}
+            className={`p-1.5 rounded-md transition-colors ${viewMode === "table" ? "bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}
+            aria-label="Table view"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setViewMode("card")}
+            className={`p-1.5 rounded-md transition-colors ${viewMode === "card" ? "bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}
+            aria-label="Card view"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+            </svg>
+          </button>
+        </div>
+      </div>
 
-      {/* Grid */}
+      {/* Grid / Table */}
       {filtered.length === 0 ? (
         <div className="text-center py-20 text-zinc-400 dark:text-zinc-500">
           <svg
@@ -222,11 +252,68 @@ export default function FitFilters({ jobs, emptyMessage, emptyIcon }: FitFilters
           <p className="text-base font-medium">No jobs match this filter</p>
           <p className="text-sm mt-1">Try selecting a different combination.</p>
         </div>
-      ) : (
+      ) : viewMode === "card" ? (
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((job) => (
             <JobCard key={job.id} job={job} />
           ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-sm">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
+                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">Title</th>
+                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400 hidden sm:table-cell">Company</th>
+                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400 hidden md:table-cell">Location</th>
+                <th className="text-center px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">Score</th>
+                <th className="text-center px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">Applied</th>
+                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400 hidden lg:table-cell">Applied On</th>
+                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400 hidden lg:table-cell">Posted</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {filtered.map((job) => (
+                <tr key={job.id} onClick={() => router.push(`/jobs/${job.id}`)} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer">
+                  <td className="px-4 py-3">
+                    <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 line-clamp-1">
+                      {job.title}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400 hidden sm:table-cell">{job.company}</td>
+                  <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500 hidden md:table-cell truncate max-w-50">{job.location}</td>
+                  <td className="px-4 py-3 text-center">
+                    {job.fit_score !== null && (
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        job.fit_score >= 65
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                          : job.fit_score >= 45
+                            ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                            : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
+                      }`}>
+                        {job.fit_score}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                      job.applied
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                        : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+                    }`}>
+                      {job.applied ? "Yes" : "No"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500 hidden lg:table-cell whitespace-nowrap">
+                    {job.applied_on ? formatDate(job.applied_on) : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500 hidden lg:table-cell whitespace-nowrap">
+                    {formatDate(job.posted_date)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

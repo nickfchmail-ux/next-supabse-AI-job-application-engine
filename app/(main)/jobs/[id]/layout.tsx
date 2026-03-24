@@ -72,6 +72,14 @@ function detectSource(url: string): JobSource {
          bgColor: "bg-orange-50 dark:bg-orange-950",
          borderColor: "border-orange-200 dark:border-orange-800",
        };
+  if (url.includes("offertoday.com"))
+    return {
+      name: "OfferToday",
+      shortName: "OfferToday",
+      color: "text-teal-700 dark:text-teal-300",
+      bgColor: "bg-teal-50 dark:bg-teal-950",
+      borderColor: "border-teal-200 dark:border-teal-800",
+    };
   return {
     name: "Job Board",
     shortName: "Job Board",

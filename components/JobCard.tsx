@@ -28,6 +28,7 @@ export type Job = {
   search_key: string | null;
   created_at: string;
   applied?: boolean | null;
+  applied_on?: string | null;
   interested_in?: boolean | null;
 };
 
@@ -65,6 +66,15 @@ function detectSource(url: string): JobSource {
       color: "text-orange-700 dark:text-orange-300",
       bgColor: "bg-orange-50 dark:bg-orange-950",
       borderColor: "border-orange-200 dark:border-orange-800",
+    };
+  }
+  if (url.includes("offertoday.com")) {
+    return {
+      name: "OfferToday",
+      shortName: "OfferToday",
+      color: "text-teal-700 dark:text-teal-300",
+      bgColor: "bg-teal-50 dark:bg-teal-950",
+      borderColor: "border-teal-200 dark:border-teal-800",
     };
   }
   return {
