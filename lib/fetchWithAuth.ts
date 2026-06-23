@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 
-export const BACKEND_URL = "https://automated-jobs-application-app-production.up.railway.app";
+export const BACKEND_URL = process.env.BACKEND_URL || "";
 
 const COOKIE_OPTS = {
   httpOnly: true,
