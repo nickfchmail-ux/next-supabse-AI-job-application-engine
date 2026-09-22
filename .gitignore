@@ -55,3 +55,10 @@ azure/ai-evaluator/package-lock.json
 
 .vercel
 .env*
+
+# ── AI tooling config ────────────────────────────────────────────────────
+# .deepcode/settings.json carries a base URL plus a LIVE API key. It was
+# committed once (commit 1441570), which put that key into this public repo's
+# history — so treat the key as compromised and rotate it. The file is still
+# useful locally, so keep it on disk but never track it again.
+.deepcode/
