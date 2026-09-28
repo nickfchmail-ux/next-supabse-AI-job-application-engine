@@ -26,7 +26,7 @@ import { revalidatePath } from "next/cache";
 
 const EVALUATOR_BASE_URL =
   process.env.NEXT_PUBLIC_EVALUATOR_URL ||
-  "https://jobsautomation-evaluator.azurewebsites.net";
+  "https://jobsautomation-evaluator-v2.azurewebsites.net";
 /**
  * Function key for the `generateDocument` HTTP trigger.
  *

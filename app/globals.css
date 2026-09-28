@@ -203,3 +203,72 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/*  Print / "Save as PDF".                                            */
+/*                                                                    */
+/*  A printed PDF must contain the DOCUMENT and nothing else — never   */
+/*  the app chrome around it (version tabs, fine-tune textarea,        */
+/*  buttons).                                                          */
+/*                                                                    */
+/*  1. Anything marked `data-print-hide` (toolbars, action rows, form  */
+/*     controls) is dropped.                                           */
+/*  2. While a document overlay is open, ONLY its paper               */
+/*     (`data-doc-paper`) prints. The version nav, the fine-tune      */
+/*     panel and the whole app shell are hidden, and the overlay's    */
+/*     fixed / blurred / 90vh shell is neutralised so the document    */
+/*     starts at the top of the page instead of being clipped.        */
+/* ------------------------------------------------------------------ */
+@media print {
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  body:has([data-doc-overlay]) * {
+    visibility: hidden !important;
+  }
+  body:has([data-doc-overlay]) [data-doc-paper],
+  body:has([data-doc-overlay]) [data-doc-paper] * {
+    visibility: visible !important;
+  }
+
+  body:has([data-doc-overlay]) [data-doc-overlay] {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    padding: 0 !important;
+    background: none !important;
+    backdrop-filter: none !important;
+  }
+
+  body:has([data-doc-overlay]) [data-doc-shell] {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  body:has([data-doc-overlay]) [data-doc-paper] {
+    position: static !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+    padding: 0 !important;
+  }
+
+  /* The resume preview is an <iframe>; in print it needs an explicit tall
+     box, otherwise the browser clips it to a single screen height. */
+  body:has([data-doc-overlay]) [data-doc-paper] iframe {
+    width: 100% !important;
+    height: 3000px !important;
+    min-height: 0 !important;
+  }
+}

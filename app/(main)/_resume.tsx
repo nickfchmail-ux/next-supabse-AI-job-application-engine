@@ -64,10 +64,7 @@ export default async function ScrapePanelWithResume() {
     hasResume = resumeInfo.ok && !!resumeInfo.fileName;
     indeedUnavailable = !sa.available;
     if (userId) {
-      const profile = await withTimeout(
-        getProfile(userId),
-        null,
-      );
+      const profile = await withTimeout(getProfile(userId), null);
       if (profile) {
         const limits = getLimitsForProfile(profile);
         maxPages = limits.search.maxPages;

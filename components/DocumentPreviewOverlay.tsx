@@ -8,6 +8,12 @@ import {
 import { getEntitlementGatesAction } from "@/app/actions/entitlements";
 import DotLoader from "@/components/DotLoader";
 import { useDocumentVersions } from "@/components/useDocumentVersions";
+import {
+  candidateNameFromLetterText,
+  candidateNameFromResumeHtml,
+  documentTitle,
+  withResumeHeading,
+} from "@/lib/candidateName";
 import { hasQuota, type EntitlementSummary } from "@/lib/entitlements-shared";
 import { motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -194,6 +200,36 @@ export default function DocumentPreviewOverlay({
     [versions],
   );
 
+  // ── The candidate's NAME ────────────────────────────────────────────────
+  // Recovered from the document we ALREADY loaded, so no extra request is
+  // made: the resume HTML carries the name in its header, the cover letter in
+  // its first lines. Used for the download file name and the document title,
+  // e.g. `FONG CHUN HONG, NICK - RESUME.pdf`.
+  const candidateName = useMemo(
+    () =>
+      type === "resume"
+        ? candidateNameFromResumeHtml(content)
+        : candidateNameFromLetterText(content),
+    [type, content],
+  );
+  // e.g. "FONG CHUN HONG, NICK - RESUME" / "… - COVER LETTER".
+  const docTitle = documentTitle(
+    candidateName,
+    type === "resume" ? "RESUME" : "COVER LETTER",
+  );
+
+  // The resume's heading is rewritten to `<NAME> - RESUME` for BOTH the preview
+  // and the "Save as PDF" output, so the document reads the same everywhere.
+  // A heading that already matches is left untouched (see `withResumeHeading`),
+  // so this agrees with the copy the server stores and never double-applies.
+  const displayContent = useMemo(
+    () =>
+      type === "resume"
+        ? withResumeHeading(content, candidateName, docTitle)
+        : content,
+    [type, content, candidateName, docTitle],
+  );
+
   async function handleFineTune() {
     const note = refinement.trim();
     if (!note) {
@@ -316,36 +352,31 @@ export default function DocumentPreviewOverlay({
   }
 
   function downloadResumePdf() {
-    if (!content) return;
-    const iframe = document.createElement("iframe");
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
-    iframe.style.border = "0";
-    document.body.appendChild(iframe);
-    const doc = iframe.contentDocument;
-    if (!doc) {
-      iframe.remove();
+    if (!displayContent) return;
+    // Print an ISOLATED copy of the document — never the surrounding app UI.
+    // The title drives the browser's "Save as PDF" file name, so the saved
+    // file is `<NAME> - RESUME.pdf` rather than a generic "document.pdf".
+    printHtmlDocument(buildPrintDocument(displayContent, docTitle));
+  }
+
+  /** Print whatever the overlay is currently showing (resume HTML or cover
+   *  letter plain text). Used by Ctrl/Cmd+P and by "Download PDF". */
+  function printActive() {
+    if (!content || isActiveBuilding) return;
+    if (type === "resume") {
+      downloadResumePdf();
       return;
     }
-    doc.open();
-    doc.write(content);
-    doc.close();
-    const finish = () => {
-      try {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-      } finally {
-        setTimeout(() => iframe.remove(), 1000);
-      }
-    };
-    if (doc.readyState === "complete") finish();
-    else
-      doc.addEventListener("readystatechange", () => {
-        if (doc.readyState === "complete") finish();
-      });
+    const escaped = content.replace(/[&<>]/g, (c) => {
+      if (c === "&") return "&amp;";
+      if (c === "<") return "&lt;";
+      return "&gt;";
+    });
+    printHtmlDocument(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${docTitle}</title><style>@page{size:A4;margin:20mm}` +
+        `body{margin:0;font:12.5px/1.6 'Segoe UI',Arial,sans-serif;color:#1f2933;white-space:pre-wrap}</style>` +
+        `</head><body>${escaped}</body></html>`,
+    );
   }
 
   async function downloadLetterDocx() {
@@ -363,6 +394,8 @@ export default function DocumentPreviewOverlay({
           }),
       );
       const doc = new Document({
+        // Word shows this as the document title.
+        title: docTitle,
         sections: [
           {
             properties: {
@@ -371,14 +404,28 @@ export default function DocumentPreviewOverlay({
               },
             },
             children: [
+              // Heading = `<NAME> - COVER LETTER` (same convention as the
+              // resume), with the role/company kept on the line beneath it so
+              // nothing that was on the document is lost.
               new Paragraph({
                 children: [
                   new TextRun({
-                    text: `Cover Letter — ${title}`,
+                    text: docTitle,
                     bold: true,
                     size: 32,
                     font: "Calibri",
                     color: "1D4ED8",
+                  }),
+                ],
+                spacing: { after: 80 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `${title} — ${company}`,
+                    size: 24,
+                    font: "Calibri",
+                    color: "6B7280",
                   }),
                 ],
                 spacing: { after: 400 },
@@ -392,7 +439,7 @@ export default function DocumentPreviewOverlay({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `cover-letter-${company.replace(/\s+/g, "-").toLowerCase()}.docx`;
+      a.download = `${docTitle}.docx`;
       a.click();
       URL.revokeObjectURL(url);
     } finally {
@@ -410,6 +457,25 @@ export default function DocumentPreviewOverlay({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  // Print (Ctrl/Cmd+P) while a document is open → print ONLY the document.
+  // Without this the browser prints the PAGE, and the PDF ends up containing
+  // the overlay chrome — the version tabs (v1/v2/…) and the fine-tune input —
+  // which was never meant to be in the printed resume.
+  useEffect(() => {
+    if (!open) return;
+    const building = active?.status === "building";
+    function onKey(e: KeyboardEvent) {
+      if (e.key.toLowerCase() === "p" && (e.ctrlKey || e.metaKey)) {
+        if (!content || building) return;
+        e.preventDefault();
+        printActive();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, content, active, type]);
+
   if (!open) return null;
 
   // The ACTIVE version is the one driving the body. A separate building
@@ -419,10 +485,12 @@ export default function DocumentPreviewOverlay({
 
   return (
     <div
+      data-doc-overlay=""
       className="fixed inset-0 z-50 flex items-center justify-center sm:p-4 bg-black/60 backdrop-blur-sm"
       onClick={onClose}
     >
       <motion.div
+        data-doc-shell=""
         initial={{ opacity: 0, scale: 0.96, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 12 }}
@@ -430,8 +498,13 @@ export default function DocumentPreviewOverlay({
         className="relative w-full max-w-4xl h-full sm:h-[90vh] flex flex-col rounded-none sm:rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl sm:border sm:border-zinc-200 sm:dark:border-zinc-700 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Top navigation bar — switch between VERSIONS of this document */}
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 sm:px-6 py-3 border-b border-zinc-200 dark:border-zinc-700 shrink-0 bg-white dark:bg-zinc-900">
+        {/* Top navigation bar — switch between VERSIONS of this document.
+            `data-print-hide` keeps the version tabs (v1/v2/…) out of any
+            printed / "Save as PDF" output. */}
+        <div
+          data-print-hide=""
+          className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 sm:px-6 py-3 border-b border-zinc-200 dark:border-zinc-700 shrink-0 bg-white dark:bg-zinc-900"
+        >
           <div className="flex items-center gap-1 min-w-0">
             <span className="text-sm font-semibold text-violet-700 dark:text-violet-400 mr-2 whitespace-nowrap">
               {type === "resume" ? "Tailored Resume" : "Cover Letter"}
@@ -449,9 +522,11 @@ export default function DocumentPreviewOverlay({
                       type="button"
                       disabled={v.status === "building"}
                       onClick={() => setActiveIdx(i)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap disabled:opacity-60 disabled:cursor-wait ${isActive
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap disabled:opacity-60 disabled:cursor-wait ${
+                        isActive
                           ? "bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800"
-                          : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 border border-transparent"}`}
+                          : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 border border-transparent"
+                      }`}
                     >
                       {v.label}
                       {v.status === "building" && (
@@ -578,8 +653,12 @@ export default function DocumentPreviewOverlay({
         {/* Body — the SINGLE scroll container. `min-h-0` is required on a
             flex child so it can shrink below its content and own the scroll
             without pushing the fixed header/bottom bars out (that was the
-            double-scrollbar bug: the fixed 80vh iframe inside overflow-auto). */}
-        <div className="flex-1 min-h-0 overflow-auto bg-white dark:bg-zinc-900">
+            double-scrollbar bug: the fixed 80vh iframe inside overflow-auto).
+            `data-doc-paper` marks this as THE only thing allowed to print. */}
+        <div
+          data-doc-paper=""
+          className="flex-1 min-h-0 overflow-auto bg-white dark:bg-zinc-900"
+        >
           {isActiveBuilding ? (
             <div className="flex flex-col items-center justify-center py-24 gap-3 text-center px-6">
               <DotLoader dotClassName="bg-violet-500" />
@@ -608,7 +687,7 @@ export default function DocumentPreviewOverlay({
                 title="Tailored resume preview"
                 className="w-full h-full min-h-0 border-0 block"
                 sandbox="allow-same-origin"
-                srcDoc={content}
+                srcDoc={displayContent ?? undefined}
               />
             ) : (
               <div className="flex items-center justify-center py-20 text-sm text-zinc-400">
@@ -628,8 +707,13 @@ export default function DocumentPreviewOverlay({
           )}
         </div>
 
-        {/* Bottom bar — Fine-tune this version */}
-        <div className="px-4 sm:px-6 py-3 border-t border-zinc-200 dark:border-zinc-700 shrink-0 bg-white dark:bg-zinc-900">
+        {/* Bottom bar — Fine-tune this version. `data-print-hide` keeps the
+            fine-tune textarea / Enhance / Regenerate controls out of any
+            printed / "Save as PDF" output. */}
+        <div
+          data-print-hide=""
+          className="px-4 sm:px-6 py-3 border-t border-zinc-200 dark:border-zinc-700 shrink-0 bg-white dark:bg-zinc-900"
+        >
           {fineTuneOpen ? (
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2">
@@ -777,6 +861,86 @@ export default function DocumentPreviewOverlay({
       </motion.div>
     </div>
   );
+}
+
+/** Elements that are app chrome, not document content. Stripped from the
+ *  document we print, and force-hidden by the CSS we inject into it. */
+const PRINT_UNSAFE_SELECTOR =
+  "nav,button,textarea,input,select,[data-print-hide],.no-print,.print-hide";
+
+/**
+ * Turn a fetched version into a STANDALONE, print-safe HTML document.
+ *
+ * The stored resume HTML is already clean, but a page-level print (Ctrl+P or
+ * the browser's Print menu item) used to capture the overlay around it, so the
+ * PDF contained the version tabs and the fine-tune input. We now (1) remove
+ * any chrome nodes from the document we are about to print and (2) inject a
+ * print stylesheet that hides them, so the output can only ever be the resume.
+ *
+ * `title`, when given, is stamped into the document `<title>`. A `<title>` is
+ * never rendered on the page — it only changes the file name the browser
+ * suggests in the "Save as PDF" dialog, so it cannot add anything to the
+ * printed output.
+ */
+function buildPrintDocument(html: string, title?: string): string {
+  let cleaned = html;
+  try {
+    const parsed = new DOMParser().parseFromString(html, "text/html");
+    parsed.querySelectorAll(PRINT_UNSAFE_SELECTOR).forEach((el) => el.remove());
+    if (title) {
+      let titleEl = parsed.querySelector("title");
+      if (!titleEl) {
+        titleEl = parsed.createElement("title");
+        (parsed.head ?? parsed.documentElement).prepend(titleEl);
+      }
+      titleEl.textContent = title;
+    }
+    cleaned = `<!DOCTYPE html>${parsed.documentElement.outerHTML}`;
+  } catch {
+    /* DOMParser unavailable — fall back to the raw HTML plus the guard CSS */
+  }
+  const guard = `<style>@media print{${PRINT_UNSAFE_SELECTOR}{display:none !important}}</style>`;
+  return /<\/head>/i.test(cleaned)
+    ? cleaned.replace(/<\/head>/i, `${guard}</head>`)
+    : `${guard}${cleaned}`;
+}
+
+/**
+ * Write `html` into a throwaway hidden iframe and open the browser's print
+ * dialog for THAT document, so only the document is ever printed — the app
+ * page (header, sidebar, overlay chrome) is not involved.
+ */
+function printHtmlDocument(html: string) {
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  document.body.appendChild(iframe);
+  const doc = iframe.contentDocument;
+  if (!doc) {
+    iframe.remove();
+    return;
+  }
+  doc.open();
+  doc.write(html);
+  doc.close();
+  const finish = () => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    } finally {
+      setTimeout(() => iframe.remove(), 1000);
+    }
+  };
+  if (doc.readyState === "complete") finish();
+  else
+    doc.addEventListener("readystatechange", () => {
+      if (doc.readyState === "complete") finish();
+    });
 }
 
 /** Strip HTML to plain text (with rough line breaks) for the Copy action. */

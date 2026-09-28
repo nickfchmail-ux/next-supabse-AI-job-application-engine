@@ -29,7 +29,6 @@ export async function getResumeInfo(): Promise<
   );
 
   // Try to find the existing file without a full bucket listing.
-  let match: { name: string } | null = null;
   for (const name of candidates) {
     const { data, error } = await supabase.storage
       .from(BUCKET)
@@ -45,35 +44,11 @@ export async function getResumeInfo(): Promise<
     }
   }
 
-  // Fallback: no file found via direct probes — do a scoped LIST to confirm
-  // (covers unusual extensions / legacy names). Only reached when the user
-  // has no resume yet, so it's rare.
-  const { data: files, error } = await supabase.storage.from(BUCKET).list("", {
-    search: `${userId}-resume`,
-  });
-
-  if (error) return { ok: false, error: error.message };
-
-  match = files?.find((f) => f.name.startsWith(`${userId}-resume`)) ?? null;
-
-  if (!match) {
-    return { ok: true, userId, fileName: null, signedUrl: null };
-  }
-
-  const { data: signed, error: signErr } = await supabase.storage
-    .from(BUCKET)
-    .createSignedUrl(match.name, 60 * 60); // 1h
-
-  if (signErr || !signed) {
-    return { ok: true, userId, fileName: match.name, signedUrl: null };
-  }
-
-  return {
-    ok: true,
-    userId,
-    fileName: match.name,
-    signedUrl: signed.signedUrl,
-  };
+  // No candidate matched. A scoped bucket LIST used to run here, but on this
+  // project a LIST with a `search` filter fails with HTTP 544
+  // `DatabaseTimeout`, so it is not a usable fallback — treat the user as
+  // having no resume.
+  return { ok: true, userId, fileName: null, signedUrl: null };
 }
 
 export type UploadResumeResult = { ok: true } | { ok: false; error: string };
@@ -102,28 +77,39 @@ export async function uploadResumeAction(
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "pdf";
   const newName = `${userId}-resume.${ext}`;
 
-  // Delete any existing resume for this user first (handles extension changes)
-  const { data: existing } = await supabase.storage.from(BUCKET).list("", {
-    search: `${userId}-resume`,
-  });
-  const old = existing?.find((f) => f.name.startsWith(`${userId}-resume`));
-  if (old && old.name !== newName) {
-    await supabase.storage.from(BUCKET).remove([old.name]);
+  // Delete any existing resume for this user first (handles extension changes).
+  // Probe the deterministic candidate names directly: a storage LIST with a
+  // `search` filter returns HTTP 544 `DatabaseTimeout` on this project, so a
+  // bucket scan must not be used to find the existing resume.
+  let knownSize: number | null = null;
+  for (const name of ["pdf", "docx", "doc"].map(
+    (ext) => `${userId}-resume.${ext}`,
+  )) {
+    // `info()` is a cheap metadata HEAD — no object body is transferred.
+    let size: number | null = null;
+    try {
+      const { data: info, error: infoErr } = await supabase.storage
+        .from(BUCKET)
+        .info(name);
+      if (infoErr || !info) continue;
+      size = typeof info.size === "number" ? info.size : null;
+    } catch {
+      // `info()` unsupported on this storage version — treat as absent.
+      continue;
+    }
+
+    if (name !== newName) {
+      await supabase.storage.from(BUCKET).remove([name]);
+      continue;
+    }
+    knownSize = size;
   }
 
   // ── Skip re-upload when the file is unchanged ──────────────────────
-  // If the existing file has the same name AND a known matching size, the
-  // content is (almost certainly) identical — don't pay the storage write
-  // again. This avoids re-uploading the resume on every save click. The
-  // `list()` response's `metadata.size` is only sometimes populated; when
-  // it's absent we fall through and upload (safe default).
-  const knownSize = (old as { metadata?: Record<string, unknown> } | undefined)
-    ?.metadata?.size;
-  if (
-    old?.name === newName &&
-    typeof knownSize === "number" &&
-    knownSize === file.size
-  ) {
+  // Same name AND a known matching size ⇒ the content is (almost certainly)
+  // identical, so don't pay for the storage write again on every save click.
+  // When the size is unknown we fall through and upload (safe default).
+  if (knownSize !== null && knownSize === file.size) {
     return { ok: true };
   }
 
