@@ -218,6 +218,29 @@ export default function DocumentPreviewOverlay({
     type === "resume" ? "RESUME" : "COVER LETTER",
   );
 
+  // While a document is open, the PAGE title becomes the document's name.
+  //
+  // The browser derives the suggested "Save as PDF" file name from
+  // `document.title`. When the page itself is printed (browser menu, or
+  // right-click → Print) while this overlay is open, only the document prints
+  // — the `body:has([data-doc-overlay])` rules in `app/globals.css` hide the
+  // rest of the app — but the page title was still the JOB POSTING's
+  // (`<job title> — <company> | JobSeek`), so the user was offered e.g.
+  // "SHIPPING ASSISTANTS CONTRACT CLERK — Madden International Limited.pdf"
+  // instead of "FONG CHUN HONG, NICK - RESUME.pdf". Unlike the Ctrl/Cmd+P
+  // shortcut (handled below by printing a hidden iframe with its own title),
+  // a menu-initiated print always uses the top-level document's title.
+  //
+  // Restored on close, so the job page's own title comes back.
+  useEffect(() => {
+    if (!open || !docTitle) return;
+    const previous = document.title;
+    document.title = docTitle;
+    return () => {
+      document.title = previous;
+    };
+  }, [open, docTitle]);
+
   // The resume's heading is rewritten to the candidate's NAME for BOTH the
   // preview and the "Save as PDF" output; the ` - RESUME` label stays in the
   // document `<title>` (i.e. the suggested file name) only. A heading that
