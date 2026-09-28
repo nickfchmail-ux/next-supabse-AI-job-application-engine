@@ -218,16 +218,17 @@ export default function DocumentPreviewOverlay({
     type === "resume" ? "RESUME" : "COVER LETTER",
   );
 
-  // The resume's heading is rewritten to `<NAME> - RESUME` for BOTH the preview
-  // and the "Save as PDF" output, so the document reads the same everywhere.
-  // A heading that already matches is left untouched (see `withResumeHeading`),
-  // so this agrees with the copy the server stores and never double-applies.
+  // The resume's heading is rewritten to the candidate's NAME for BOTH the
+  // preview and the "Save as PDF" output; the ` - RESUME` label stays in the
+  // document `<title>` (i.e. the suggested file name) only. A heading that
+  // already matches is left untouched (see `withResumeHeading`), so this agrees
+  // with the copy the server stores and never double-applies.
   const displayContent = useMemo(
     () =>
       type === "resume"
-        ? withResumeHeading(content, candidateName, docTitle)
+        ? withResumeHeading(content, candidateName)
         : content,
-    [type, content, candidateName, docTitle],
+    [type, content, candidateName],
   );
 
   async function handleFineTune() {

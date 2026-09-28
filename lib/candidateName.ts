@@ -10,7 +10,9 @@
  *   - cover letter → the generated cover-letter plain text (its first lines)
  *
  * The name is then used for the download file name and the document title,
- * e.g. `FONG CHUN HONG, NICK - RESUME.pdf`.
+ * e.g. `FONG CHUN HONG, NICK - RESUME.pdf`. In the resume's VISIBLE `<h1>`
+ * heading it appears on its OWN (`FONG CHUN HONG, NICK`) — the ` - RESUME`
+ * label is reserved for the file name / document `<title>`.
  *
  * NOTE: the name keeps its INTERNAL commas (`FONG CHUN HONG, NICK`) — the last
  * name follows the first name after a comma in Hong Kong convention. Only a
@@ -120,21 +122,22 @@ export function candidateNameFromResumeHtml(html: string | null): string {
 }
 
 /**
- * Rewrite the resume's `<h1>` heading to `title` (`FONG CHUN HONG, NICK -
- * RESUME`).
+ * Rewrite the resume's `<h1>` heading to the candidate's NAME
+ * (`FONG CHUN HONG, NICK`). The ` - RESUME` label belongs only in the FILE
+ * NAME / document `<title>` — never in the heading a reader sees.
  *
  * Only a PLAIN-TEXT `<h1>` whose current text already IS the candidate's name
  * is touched, so a styled or unexpected heading is left exactly as generated.
  * Applying it to an already-correct heading is a no-op, because the trailing
  * document label is stripped before the comparison — which keeps this
- * idempotent with the copy the server stored.
+ * idempotent with the copy the server stored, and also repairs older documents
+ * whose heading was stamped as `NAME - RESUME`.
  */
 export function withResumeHeading(
   html: string | null | undefined,
   name: string,
-  title: string,
 ): string | null {
-  if (!html || !name || !title) return html ?? null;
+  if (!html || !name) return html ?? null;
 
   const re = /(<h1\b[^>]*>)([\s\S]*?)(<\/h1>)/i;
   const match = html.match(re);
@@ -147,7 +150,7 @@ export function withResumeHeading(
   );
   if (!current || current.toLowerCase() !== name.toLowerCase()) return html;
 
-  const escaped = title
+  const escaped = name
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");

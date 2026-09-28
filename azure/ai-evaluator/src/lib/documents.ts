@@ -93,7 +93,9 @@ function comparableHeading(raw: string): string {
 }
 
 /**
- * Rewrite the resume's `<h1>` heading to `<NAME> - RESUME`.
+ * Rewrite the resume's `<h1>` heading to the candidate's NAME
+ * (`FONG CHUN HONG, NICK`). The ` - RESUME` label belongs only in the FILE
+ * NAME (the document `<title>`), never in the heading a reader sees.
  *
  * Only a PLAIN-TEXT `<h1>` whose current text is already the candidate's name
  * is touched, so a styled or unexpected heading is left exactly as generated.
@@ -101,8 +103,8 @@ function comparableHeading(raw: string): string {
  * label is stripped before comparing), which keeps it idempotent with the
  * client-side rewrite of the same document.
  */
-function stampResumeHeading(html: string, name: string, title: string): string {
-  if (!name || !title) return html;
+function stampResumeHeading(html: string, name: string): string {
+  if (!name) return html;
   const re = /(<h1\b[^>]*>)([\s\S]*?)(<\/h1>)/i;
   const match = html.match(re);
   if (!match || match.index === undefined) return html;
@@ -115,7 +117,7 @@ function stampResumeHeading(html: string, name: string, title: string): string {
   return (
     html.slice(0, match.index) +
     match[1] +
-    escapeHtmlText(title) +
+    escapeHtmlText(name) +
     match[3] +
     html.slice(match.index + match[0].length)
   );
@@ -271,7 +273,9 @@ export async function generateTailoredResume(
     );
     // The stored HTML carries the candidate's name in both places the user
     // sees it:
-    //   - `<h1>FONG CHUN HONG, NICK - RESUME</h1>` — what the resume reads as
+    //   - `<h1>FONG CHUN HONG, NICK</h1>` — the heading the resume READS as.
+    //     The ` - RESUME` label is deliberately NOT here: a reader should see
+    //     the candidate's name, not a document label.
     //   - `<title>FONG CHUN HONG, NICK - RESUME</title>` — names the file the
     //     browser suggests in its "Save as PDF" dialog
     // The name is recovered from the uploaded resume, because it is stored
@@ -280,11 +284,7 @@ export async function generateTailoredResume(
     const candidateName = candidateNameFromResumeText(resumeText);
     const docTitle = candidateName ? `${candidateName} - RESUME` : "";
     const printReadyHtml = stampDocumentTitle(
-      stampResumeHeading(
-        enhanceResumeForPrint(resumeHtml),
-        candidateName,
-        docTitle,
-      ),
+      stampResumeHeading(enhanceResumeForPrint(resumeHtml), candidateName),
       docTitle,
     );
     const { resumeUrl, fileName } = await storeGeneratedResume({
