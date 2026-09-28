@@ -30,7 +30,7 @@ The project is an **AI-powered job application engine**: users search job boards
 
 - **Next.js 16** (App Router, React 19, server components + server actions)
 - **Supabase** — Postgres DB, Realtime (postgres_changes), Storage (resume bucket)
-- **Azure Functions** — scraper (`jobsautomation-fn`) + AI evaluator (`jobsautomation-evaluator` in `azure/ai-evaluator`)
+- **Azure Functions** — scraper (`jobsautomation-scraper`) + AI evaluator (`jobsautomation-evaluator-v2` in `azure/ai-evaluator`)
 - **Azure Service Bus** — scraper uses the backend's bus; the evaluator has its OWN bus + `evaluation-requests` queue (one queue, one worker)
 - **socket.io-client** — live funnel + evaluation pushes (unified `stats` event)
 - **Redux Toolkit** — client state (`state/global/store.ts`, slices)

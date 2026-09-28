@@ -2,7 +2,7 @@
 /*  Types for the Jobs Automation Platform APIs                        */
 /*                                                                     */
 /*  - Express API server : https://ai-job-server-r2dk.onrender.com  */
-/*  - Azure Functions    : https://jobsautomation-fn.azurewebsites.net */
+/*  - Azure Functions    : https://jobsautomation-scraper.azurewebsites.net */
 /*  - Supabase           : https://uqrgivzeklqehuqqqqyv.supabase.co    */
 /*  - WebSocket (socket.io) : wss://ai-job-server-r2dk.onrender.com */
 /* ------------------------------------------------------------------ */

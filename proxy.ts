@@ -1,8 +1,4 @@
-import {
-  createRemoteJWKSet,
-  errors as joseErrors,
-  jwtVerify,
-} from "jose";
+import { createRemoteJWKSet, errors as joseErrors, jwtVerify } from "jose";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 

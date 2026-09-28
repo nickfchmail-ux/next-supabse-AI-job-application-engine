@@ -1,6 +1,6 @@
 ---
 name: azure-functions-development
-description: "JobSeek Azure Functions development: the two function apps (scraper jobsautomation-fn, evaluator jobsautomation-evaluator), azure/ai-evaluator structure, triggers (HTTP + Service Bus queue), local dev, keys, deployment. Use when: Azure Functions, Service Bus, triggers, azure/ai-evaluator, host.json, local.settings.json, function keys, evaluateStatus, deploy functions."
+description: "JobSeek Azure Functions development: the two function apps (scraper jobsautomation-scraper, evaluator jobsautomation-evaluator-v2), azure/ai-evaluator structure, triggers (HTTP + Storage Queue), local dev, keys, deployment. Use when: Azure Functions, Storage Queue, triggers, azure/ai-evaluator, host.json, local.settings.json, function keys, evaluateStatus, deploy functions."
 ---
 
 # JobSeek Azure Functions Development
@@ -9,10 +9,14 @@ description: "JobSeek Azure Functions development: the two function apps (scrape
 
 | App       | Base URL                                                | Purpose                                                    | Key env                                            |
 | --------- | ------------------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------- |
-| Scraper   | `jobsautomation-fn`                                     | Scrape job boards, push jobs, manage pipeline runs         | `NEXT_PUBLIC_AZURE_FN_URL`, `AZURE_SCRAPE_KEY`     |
-| Evaluator | `jobsautomation-evaluator` (repo: `azure/ai-evaluator`) | AI-fit scoring + tailored resumes/cover letters (3 queues) | `NEXT_PUBLIC_EVALUATOR_URL`, `AZURE_EVALUATOR_KEY` |
+| Scraper   | `jobsautomation-scraper`                                    | Scrape job boards, push jobs, manage pipeline runs         | `NEXT_PUBLIC_AZURE_FN_URL`, `AZURE_SCRAPE_KEY`     |
+| Evaluator | `jobsautomation-evaluator-v2` (repo: `azure/ai-evaluator`) | AI-fit scoring + tailored resumes/cover letters (3 queues) | `NEXT_PUBLIC_EVALUATOR_URL`, `AZURE_EVALUATOR_KEY` |
 
-The evaluator is a **separate deployable microservice** so slow/expensive LLM calls never block scraping and it scales independently. It owns its OWN Service Bus namespace with **three queues** (evaluation, resume, cover letter).
+The evaluator is a **separate deployable microservice** so slow/expensive LLM calls never block scraping and it scales independently. It owns **three Azure Storage Queues** (evaluation, resume, cover letter) inside its OWN host storage account.
+
+> **Names are globally unique and the originals are RETIRED.** `jobsautomation-fn`
+> and `jobsautomation-evaluator` are still held by AdminDisabled apps in the OLD
+> subscription (`ee2c075a-...`) and cannot be started or reused.
 
 ## `azure/ai-evaluator` Structure
 
@@ -20,14 +24,14 @@ The evaluator is a **separate deployable microservice** so slow/expensive LLM ca
 azure/ai-evaluator/
 ├── src/
 │   ├── index.ts
-│   ├── functions/        # evaluate (HTTP), evaluateWorker (SB), evaluateStatus (HTTP),
-│   │                     # generateDocument (HTTP), resumeWorker (SB), coverLetterWorker (SB)
+│   ├── functions/        # evaluate (HTTP), evaluateWorker (Storage Queue), evaluateStatus (HTTP),
+│   │                     # generateDocument (HTTP), resumeWorker (Storage Queue), coverLetterWorker (Storage Queue)
 │   ├── lib/              # evaluateJob, documents, ai, prompts, resume, resumeDocuments,
-│   │                     # socket, serviceBus, status, supabase
+│   │                     # socket, storageQueue, status, supabase
 │   ├── shared/           # shared helpers
 │   └── types/
 ├── migrations/           # evaluation_runs + cover_letter_status migrations
-├── infra/queues.bicep    # the evaluator's OWN Service Bus queues
+├── infra/queues.bicep    # no-op placeholder — Storage Queues are auto-created in the host storage account
 ├── host.json
 ├── local.settings.json
 ├── package.json          # npm run build (tsc), npm run watch, func host start

@@ -1,5 +1,5 @@
 ---
-description: "Azure Functions specialist for JobSeek. Owns the Azure Functions microservices: the scraper (jobsautomation-fn) and the AI evaluator (jobsautomation-evaluator in azure/ai-evaluator), Service Bus queues, function triggers, and Azure deployment. USE WHEN: azure function, azure functions, service bus, queue, scraper, azure/ai-evaluator, trigger, host.json, local.settings.json, deploy to azure, function key, evaluateStatus, deploy functions."
+description: "Azure Functions specialist for JobSeek. Owns the Azure Functions microservices: the scraper (jobsautomation-scraper) and the AI evaluator (jobsautomation-evaluator-v2 in azure/ai-evaluator), Storage Queues, function triggers, and Azure deployment. USE WHEN: azure function, azure functions, storage queue, queue, scraper, azure/ai-evaluator, trigger, host.json, local.settings.json, deploy to azure, function key, evaluateStatus, deploy functions."
 name: "Azure Functions Agent"
 tools: [read, search, edit, execute, web]
 user-invocable: false
@@ -23,9 +23,9 @@ You are the **Azure Functions Agent** for JobSeek. You own the serverless micros
 
 ## What You Own
 
-- `azure/ai-evaluator/` (functions: evaluate, evaluateWorker, evaluateStatus, generateDocument, resumeWorker, coverLetterWorker; lib: ai, documents, evaluateJob, prompts, resume, resumeDocuments, socket, serviceBus, status, supabase)
-- The scraper Azure Function app (jobsautomation-fn)
-- Service Bus wiring: scraper uses the backend's bus; the evaluator has its OWN bus with THREE queues: `evaluation-requests` (scoring), `resume-requests` (tailored resume), `cover-letter-requests` (cover letter) — no function-to-function chain. Fit jobs auto-enqueue resume + cover-letter builds via the dedicated workers.
+- `azure/ai-evaluator/` (functions: evaluate, evaluateWorker, evaluateStatus, generateDocument, resumeWorker, coverLetterWorker; lib: ai, documents, evaluateJob, prompts, resume, resumeDocuments, socket, storageQueue, status, supabase)
+- The scraper Azure Function app (jobsautomation-scraper)
+- Storage Queue wiring: the scraper uses the backend's queues; the evaluator has its OWN account with THREE queues: `evaluation-requests` (scoring), `resume-requests` (tailored resume), `cover-letter-requests` (cover letter) — no function-to-function chain. Fit jobs auto-enqueue resume + cover-letter builds via the dedicated workers.
 - `host.json`, `local.settings.json`, `infra/queues.bicep`, function keys, deployment
 
 > **Evaluator → socket:** the evaluator POSTs to the backend Express
