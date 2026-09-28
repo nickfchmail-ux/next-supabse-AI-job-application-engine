@@ -26,7 +26,11 @@ export default function ScrollJobDetailToTop() {
     if (!pathname?.startsWith("/jobs/")) return;
 
     const toTop = () => {
-      window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+      window.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: "instant" as ScrollBehavior,
+      });
       // Also reset any scrollable ancestor in case the layout scrolls a
       // container (mobile top bar / drawer) rather than the window.
       document.documentElement.scrollTop = 0;

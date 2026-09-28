@@ -25,9 +25,12 @@ import type {
 /*  Server-only: the Azure Function key must NEVER reach the client.   */
 /* ------------------------------------------------------------------ */
 
+// Fallback hostname only — set NEXT_PUBLIC_AZURE_FN_URL in the environment.
+// ('jobsautomation-fn' is retired: that app is AdminDisabled in the old
+//  subscription and its globally-unique name cannot be reused.)
 const SCRAPE_FUNCTION_URL =
   (process.env.NEXT_PUBLIC_AZURE_FN_URL ||
-    "https://jobsautomation-fn.azurewebsites.net") + "/api/scrape";
+    "https://jobsautomation-scraper.azurewebsites.net") + "/api/scrape";
 const SCRAPE_FUNCTION_KEY = process.env.AZURE_SCRAPE_KEY || "";
 const RUN_STATUS_FUNCTION_KEY = process.env.AZURE_RUN_STATUS_KEY || "";
 
@@ -131,6 +134,14 @@ export async function startScrapeAction(
       if (contentType.includes("application/json")) {
         const body = await res.json().catch(() => ({}));
         if (body?.message || body?.error) errorMsg = body.message || body.error;
+      } else if ([403, 502, 503, 504].includes(res.status)) {
+        // A STOPPED / admin-disabled Function App never answers with our JSON
+        // error envelope — it returns Azure's HTML "This web app is stopped"
+        // page (403) or a gateway 5xx. Detect that (non-JSON + those statuses)
+        // and emit a code the UI maps to honest, actionable copy instead of
+        // leaking "Server error 403" or falling through to a generic message.
+        errorMsg =
+          "SERVICE_UNAVAILABLE: The job search service is temporarily unavailable.";
       }
       console.error(
         `[startScrapeAction] Azure Function returned ${res.status}: ${errorMsg}`,
@@ -262,7 +273,7 @@ export async function getAzureRunStatusAction(
 ): Promise<GetAzureRunStatusResult> {
   const base =
     process.env.NEXT_PUBLIC_AZURE_FN_URL ||
-    "https://jobsautomation-fn.azurewebsites.net";
+    "https://jobsautomation-scraper.azurewebsites.net";
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
 

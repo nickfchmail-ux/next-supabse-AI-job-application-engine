@@ -151,6 +151,12 @@ export default function ScrapePanel({
         if (result.error.startsWith("LIMIT_REACHED:")) {
           // Free-tier quota exhausted → point to the upgrade path.
           friendly = result.error.replace(/^LIMIT_REACHED:\s*/, "");
+        } else if (result.error.startsWith("SERVICE_UNAVAILABLE:")) {
+          // The scrape Function App is stopped/disabled or unreachable — an
+          // outage on our side, not the user's job boards. Be honest about it
+          // and make clear their saved data is safe.
+          friendly =
+            "The job search service is temporarily unavailable — this is on our side, not yours. Your saved jobs are safe. Please try again shortly.";
         } else if (/429|limit|quota/i.test(result.error)) {
           friendly = "You've hit today's search limit. It resets at midnight.";
         } else if (/rate|too many|busy/i.test(result.error)) {
@@ -258,7 +264,8 @@ export default function ScrapePanel({
               Search Jobs
             </h2>
             <p className="text-xs text-zinc-400 dark:text-zinc-500">
-              Find and analyse new listings from the job boards
+              Collect new listings from the job boards — they are scored in step
+              2
             </p>
           </div>
         </div>

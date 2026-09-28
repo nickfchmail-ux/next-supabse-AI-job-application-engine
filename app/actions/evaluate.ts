@@ -20,7 +20,7 @@ import type {
 
 const EVALUATOR_BASE_URL =
   process.env.NEXT_PUBLIC_EVALUATOR_URL ||
-  "https://jobsautomation-evaluator.azurewebsites.net";
+  "https://jobsautomation-evaluator-v2.azurewebsites.net";
 // Per-function key for the `evaluate` POST trigger.
 const EVALUATOR_FUNCTION_KEY = process.env.AZURE_EVALUATOR_KEY || "";
 // HOST key — authorizes EVERY function, including GET /api/evaluate/{runId}
@@ -62,7 +62,7 @@ export async function startEvaluationAction(
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30_000);
+  const timeout = setTimeout(() => controller.abort(), 150_000);
 
   try {
     const res = await fetch(`${EVALUATOR_BASE_URL}/api/evaluate`, {
@@ -127,7 +127,7 @@ export async function getEvaluationStatusAction(
   runId: string,
 ): Promise<EvaluationStatusResult> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
+  const timeout = setTimeout(() => controller.abort(), 60_000);
 
   try {
     const res = await fetch(
@@ -221,10 +221,7 @@ export async function listSearchKeysAction(
     );
 
     if (rpcErr) {
-      console.error(
-        "[listSearchKeysAction] rpc error:",
-        rpcErr.message,
-      );
+      console.error("[listSearchKeysAction] rpc error:", rpcErr.message);
       // Fall back to the direct query so the dropdown still works even if the
       // RPC is missing (e.g. not deployed yet on an older DB).
       const { data: scored, error: scoredErr } = await supabase
@@ -278,18 +275,17 @@ export async function listSearchKeysAction(
       return { ok: true, keys, runId };
     }
 
-    const keys: SearchKeyOption[] = ((rows ?? []) as {
-      search_key: string | null;
-      unevaluated: number;
-      total: number;
-      run_id: string | null;
-    }[])
+    const keys: SearchKeyOption[] = (
+      (rows ?? []) as {
+        search_key: string | null;
+        unevaluated: number;
+        total: number;
+        run_id: string | null;
+      }[]
+    )
       .map((row) => ({
         searchKey: (row.search_key ?? "").trim().toLowerCase(),
-        keyword: (row.search_key ?? "")
-          .trim()
-          .toLowerCase()
-          .replace(/_/g, " "),
+        keyword: (row.search_key ?? "").trim().toLowerCase().replace(/_/g, " "),
         total: Number(row.total) || 0,
         unevaluated: Number(row.unevaluated) || 0,
         runId: row.run_id ?? null,

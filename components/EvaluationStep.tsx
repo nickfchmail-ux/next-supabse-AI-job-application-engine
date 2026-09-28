@@ -113,7 +113,8 @@ export default function EvaluationStep() {
       ? (r.keyword ?? "").toLowerCase().replace(/\s+/g, "_") === scopeKeyNorm
       : true,
   );
-  const completedFit = scopedRuns.reduce((n, r) => n + (r.fit_jobs ?? 0), 0);
+  // NOTE: `completedFit` deliberately does NOT come from `scopedRuns` — see the
+  // definition further down, after `activeRunId`, for why.
   // The scoped batches are the source of truth for "is this match done?" — the
   // global `evaluationStatus` can stay "evaluating" (another key's batch active
   // account-wide, or a stale socket event), which would otherwise keep the panel
@@ -234,6 +235,38 @@ export default function EvaluationStep() {
     runId ??
     null;
 
+  // Authoritative "good fits" count for the CURRENT batch, shown in the
+  // completion banner.
+  //
+  // ⚠️ This must stay IDENTICAL in scope to how `EvaluationProgress` selects the
+  // rows of the table printed directly beneath the banner — otherwise the two
+  // contradict each other on screen.
+  //
+  // `scopedRuns` above filters by KEY ONLY. Since an account-wide match is
+  // per-key, re-matching the SAME key (or a previous session's "gov" batch still
+  // sitting in the socket's account-wide list) leaves several runs sharing the
+  // keyword, and summing `fit_jobs` over all of them ADDED THEM UP — the banner
+  // read "36 good fits" over a table whose row said 11. Scope by the run
+  // captured at click time as well, and use the same `startsWith` key test as
+  // the table (a `===` test also missed keys like "gov" vs "gov_hk").
+  const activeBatchRuns = evaluationRuns.filter((r) => {
+    if (scopeKeyNorm) {
+      const key = String(r.keyword ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "_");
+      if (!key.startsWith(scopeKeyNorm)) return false;
+    }
+    if (activeRunId) {
+      if (r.pipeline_run_id && r.pipeline_run_id !== activeRunId) return false;
+    }
+    return true;
+  });
+  const completedFit = activeBatchRuns.reduce(
+    (n, r) => n + (r.fit_jobs ?? 0),
+    0,
+  );
+
   // Auto-refresh keys once evaluation reaches a terminal state — this drops
   // the just-matched key (now fully scored) and surfaces any remaining keys.
   //
@@ -330,8 +363,23 @@ export default function EvaluationStep() {
       return;
     const id = activeRunId; // narrow to string for the async closure
     let disposed = false;
+    // A status call can take a long time when the database is degraded. The
+    // poller runs on a fixed 3s interval, so without this guard slow polls
+    // stack up: dozens of overlapping requests, each holding a database
+    // connection, which makes the degradation worse. Skip a tick instead.
+    let inFlight = false;
 
     async function poll() {
+      if (disposed || inFlight) return;
+      inFlight = true;
+      try {
+        await pollOnce();
+      } finally {
+        inFlight = false;
+      }
+    }
+
+    async function pollOnce() {
       if (disposed) return;
       // Primary source: REST status from the evaluator. It now returns
       // fit/not-fit/remaining per batch (mirrors the socket payload), so this
@@ -578,8 +626,8 @@ export default function EvaluationStep() {
                   selectedKey?.keyword ??
                   "Your search"}
               </strong>{" "}
-              was matched. {completedFit} great fit
-              {completedFit !== 1 ? "s" : ""} ready to review.
+              was matched. {completedFit} good fit
+              {completedFit !== 1 ? "s" : ""} to look at in Matches.
             </div>
             {/* Keep the completed progress table visible so the user sees
                 the final per-keyword results instead of the panel vanishing
@@ -611,8 +659,8 @@ export default function EvaluationStep() {
                   All matched — nothing left to score.
                 </p>
                 <p className="text-xs text-emerald-700/80 dark:text-emerald-400/80">
-                  {completedFit} great fit
-                  {completedFit !== 1 ? "s" : ""} ready to review.
+                  {completedFit} good fit
+                  {completedFit !== 1 ? "s" : ""} to look at in Matches.
                 </p>
               </div>
             </div>
@@ -696,10 +744,10 @@ export default function EvaluationStep() {
           <p>
             You&apos;ve matched every job in your search.{" "}
             <strong className="font-semibold text-[var(--ink)]">
-              {completedFit} great fit
+              {completedFit} good fit
               {completedFit !== 1 ? "s" : ""}
             </strong>{" "}
-            ready to review in{" "}
+            waiting in{" "}
             <button
               onClick={() => router.push("/matches")}
               className="text-[var(--accent)] hover:underline font-medium"
