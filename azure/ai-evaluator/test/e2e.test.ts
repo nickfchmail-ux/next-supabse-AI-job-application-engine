@@ -132,7 +132,7 @@ function installMocks(sb: ReturnType<typeof makeSupabase>) {
   };
 
   mock("../src/lib/supabase.js", { getSupabase: () => sb });
-  mock("../src/lib/serviceBus.js", {
+  mock("../src/lib/storageQueue.js", {
     enqueueEvaluation: async (body: unknown) => {
       state.enqueued.push(body);
       return "msg-1";

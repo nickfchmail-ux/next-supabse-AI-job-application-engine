@@ -7,6 +7,50 @@ import {
 import { getSupabase } from "../lib/supabase.js";
 
 /**
+ * Budget for the single Supabase read on the status path.
+ *
+ * The UI polls this endpoint while a match is running, so a request that never
+ * settles is worse here than anywhere else: it wedges the progress panel with
+ * no update and no error. Fail fast enough that the next poll can succeed.
+ */
+const DB_CALL_TIMEOUT_MS = Number(
+  process.env["EVALUATE_DB_TIMEOUT_MS"] ?? 45_000,
+);
+
+class DbUnavailableError extends Error {}
+
+function isDbUnavailable(e: unknown): boolean {
+  if (e instanceof DbUnavailableError) return true;
+  const msg = e instanceof Error ? e.message : String(e);
+  return /timed?[ _-]?out|abort(ed)?|upstream request|database[ _-]?timeout|fetch failed|socket hang up|\b50[234]\b|\b544\b/i.test(
+    msg,
+  );
+}
+
+/** Await a Supabase call under a hard deadline so it can never hang forever. */
+async function dbCall<T>(label: string, op: PromiseLike<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      op,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new DbUnavailableError(
+                `${label} timed out after ${DB_CALL_TIMEOUT_MS}ms`,
+              ),
+            ),
+          DB_CALL_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/**
  * GET /api/evaluate/{runId}
  *
  * Returns per-keyword-batch progress for a run. The frontend uses this to
@@ -22,13 +66,24 @@ export const evaluateStatus: HttpHandler = async (
 
   const sb = getSupabase();
   try {
-    const { data, error } = await sb
-      .from("evaluation_runs")
-      .select("*")
-      .eq("pipeline_run_id", runId)
-      .order("created_at", { ascending: true });
+    const { data, error } = await dbCall(
+      "load evaluation batches",
+      sb
+        .from("evaluation_runs")
+        .select("*")
+        .eq("pipeline_run_id", runId)
+        .order("created_at", { ascending: true }),
+    );
 
     if (error) {
+      if (isDbUnavailable(error.message))
+        return json(
+          {
+            error:
+              "The database didn't respond in time. Please try again in a moment.",
+          },
+          503,
+        );
       return json({ error: error.message }, 500);
     }
 
@@ -96,6 +151,17 @@ export const evaluateStatus: HttpHandler = async (
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unexpected error";
     context.error(`evaluateStatus failed: ${msg}`);
+    // The UI polls this: a 503 tells it to simply try again, whereas a 500
+    // surfaces as a hard failure in the progress panel.
+    if (isDbUnavailable(e)) {
+      return json(
+        {
+          error:
+            "The database didn't respond in time. Please try again in a moment.",
+        },
+        503,
+      );
+    }
     return json({ error: msg }, 500);
   }
 };

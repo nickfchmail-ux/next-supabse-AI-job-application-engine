@@ -1,4 +1,5 @@
 import type { EvaluationRunRow, EvaluationRunStatus } from "../shared/types.js";
+import { isTransientDbError, withDbRetry } from "./dbRetry.js";
 import { getSupabase } from "./supabase.js";
 
 /**
@@ -74,16 +75,29 @@ export async function incrementEvaluationRun(params: {
   const sb = getSupabase();
 
   // Preferred: atomic RPC (migration 004 + 005) so concurrent workers never
-  // lose an update.
+  // lose an update. Retried on transient gateway errors — a lost rollup leaves
+  // the batch short of `total` forever, which is what kept the UI stuck on
+  // "Matching…" while individual workers had long since finished.
   try {
-    const { data, error } = await sb.rpc("increment_evaluation_run", {
-      p_run_id: params.evaluationRunId,
-      p_processed: params.processed,
-      p_failed: params.failed,
-      p_last_error: params.lastError ?? null,
-      p_fit: params.fit ?? 0,
-      p_not_fit: params.notFit ?? 0,
-    });
+    const { data, error } = await withDbRetry(
+      `increment_evaluation_run ${params.evaluationRunId}`,
+      async () => {
+        const res = await sb.rpc("increment_evaluation_run", {
+          p_run_id: params.evaluationRunId,
+          p_processed: params.processed,
+          p_failed: params.failed,
+          p_last_error: params.lastError ?? null,
+          p_fit: params.fit ?? 0,
+          p_not_fit: params.notFit ?? 0,
+        });
+        // A transient error must be thrown so the retry wrapper can act on it;
+        // a permanent one still falls through to the read-modify-write path.
+        if (res.error && isTransientDbError(res.error.message)) {
+          throw new Error(res.error.message);
+        }
+        return res;
+      },
+    );
     if (!error) {
       const r = (data ?? {}) as {
         total?: number;
@@ -114,35 +128,40 @@ export async function incrementEvaluationRun(params: {
 
   // Fallback: read-modify-write (non-atomic — acceptable at low concurrency;
   // install migration 004/005 for full atomicity at high concurrency).
-  const { data: row, error: readErr } = await sb
-    .from("evaluation_runs")
-    .select("total_jobs, processed_jobs, failed_jobs, fit_jobs, not_fit_jobs")
-    .eq("id", params.evaluationRunId)
-    .maybeSingle();
-  if (readErr) {
-    throw new Error(`Failed to read evaluation run: ${readErr.message}`);
-  }
+  const row = await withDbRetry(`read evaluation run ${params.evaluationRunId}`, async () => {
+    const { data, error } = await sb
+      .from("evaluation_runs")
+      .select("total_jobs, processed_jobs, failed_jobs, fit_jobs, not_fit_jobs")
+      .eq("id", params.evaluationRunId)
+      .maybeSingle();
+    if (error) {
+      throw new Error(`Failed to read evaluation run: ${error.message}`);
+    }
+    return data;
+  });
   const total = Number(row?.total_jobs ?? 0);
   const processed = Number(row?.processed_jobs ?? 0) + params.processed;
   const failed = Number(row?.failed_jobs ?? 0) + params.failed;
   const fit = Number(row?.fit_jobs ?? 0) + (params.fit ?? 0);
   const notFit = Number(row?.not_fit_jobs ?? 0) + (params.notFit ?? 0);
 
-  const { error: updErr } = await sb
-    .from("evaluation_runs")
-    .update({
-      processed_jobs: processed,
-      failed_jobs: failed,
-      fit_jobs: fit,
-      not_fit_jobs: notFit,
-      last_error: params.lastError ?? null,
-      status: "evaluating",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", params.evaluationRunId);
-  if (updErr) {
-    throw new Error(`Failed to update evaluation run: ${updErr.message}`);
-  }
+  await withDbRetry(`update evaluation run ${params.evaluationRunId}`, async () => {
+    const { error: updErr } = await sb
+      .from("evaluation_runs")
+      .update({
+        processed_jobs: processed,
+        failed_jobs: failed,
+        fit_jobs: fit,
+        not_fit_jobs: notFit,
+        last_error: params.lastError ?? null,
+        status: "evaluating",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", params.evaluationRunId);
+    if (updErr) {
+      throw new Error(`Failed to update evaluation run: ${updErr.message}`);
+    }
+  });
 
   return {
     total,
@@ -169,15 +188,20 @@ export async function setPipelineRunEvaluationStatus(
   lastError?: string | null,
 ): Promise<void> {
   const sb = getSupabase();
-  const { error } = await sb
-    .from("pipeline_runs")
-    .update({
-      evaluation_status: status,
-      ...(lastError ? { last_error: lastError } : {}),
-    })
-    .eq("id", pipelineRunId)
-    .eq("user_id", userId);
-  if (error) {
-    throw new Error(`Failed to update pipeline run: ${error.message}`);
-  }
+  // Retried: this flip is what releases the frontend from "Matching…". If it
+  // fails Transiently the run stays `queued`/`evaluating` forever and the UI
+  // hangs even though every job finished.
+  await withDbRetry(`set pipeline run ${pipelineRunId} = ${status}`, async () => {
+    const { error } = await sb
+      .from("pipeline_runs")
+      .update({
+        evaluation_status: status,
+        ...(lastError ? { last_error: lastError } : {}),
+      })
+      .eq("id", pipelineRunId)
+      .eq("user_id", userId);
+    if (error) {
+      throw new Error(`Failed to update pipeline run: ${error.message}`);
+    }
+  });
 }

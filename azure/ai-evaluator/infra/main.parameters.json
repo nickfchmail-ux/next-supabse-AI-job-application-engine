@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0",
+  "parameters": {
+    "functionAppName": {
+      "value": "jobsautomation-evaluator-v2"
+    },
+    "location": {
+      "value": "eastasia"
+    },
+    "storageAccountName": {
+      "value": "jobsautold46rmnuvvqpi"
+    },
+    "supabaseUrl": {
+      "value": "https://uqrgivzeklqehuqqqqyv.supabase.co"
+    },
+    "supabaseServiceKey": {
+      "value": "<your-supabase-service-role-key>"
+    },
+    "deepSeekBaseUrl": {
+      "value": "https://api.deepseek.com/v1"
+    },
+    "deepSeekApi": {
+      "value": "<your-deepseek-api-key>"
+    },
+    "deepSeekModel": {
+      "value": "deepseek-chat"
+    },
+    "stateWebhookUrl": {
+      "value": "https://ai-job-server-r2dk.onrender.com/webhook/state"
+    },
+    "stateWebhookSecret": {
+      "value": "<your-state-webhook-secret>"
+    },
+    "defaultCountryCode": {
+      "value": "hk"
+    }
+  }
+}

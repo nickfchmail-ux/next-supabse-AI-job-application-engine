@@ -1,5 +1,13 @@
 {
   "version": "2.0",
+  // 10 minutes is the MAXIMUM on a Linux Consumption plan. The default is 5.
+  // A single evaluation worker can legitimately spend: ~11s fetching the
+  // resume + up to 4 x 60s LLM attempts (with 0.5/1.5/4s backoff) + DB writes
+  // with their own backoff. At the 5-minute default the host KILLED workers
+  // mid-flight, the queue message went invisible for 5 minutes and was
+  // redelivered, and the job outcome was never rolled up — which is why a
+  // 24-job batch showed only 18 accounted outcomes and hung for 23 minutes.
+  "functionTimeout": "00:10:00",
   "extensionBundle": {
     "id": "Microsoft.Azure.Functions.ExtensionBundle",
     "version": "[4.*, 5.0.0)"
@@ -9,8 +17,9 @@
       // Storage Queue triggers (FREE replacement for Service Bus).
       // messageEncoding base64 matches what the producer base64-encodes.
       // visibilityTimeout gives the slow LLM workers (resume/cover-letter
-      // generation) time to finish before a message is re-delivered.
-      "visibilityTimeout": "00:05:00",
+      // generation) time to finish before a message is re-delivered. Kept
+      // ABOVE functionTimeout so a still-running worker is never duplicated.
+      "visibilityTimeout": "00:11:00",
       "maxDequeueCount": 5,
       "batchSize": 8,
       "newBatchThreshold": 4,

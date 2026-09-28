@@ -4,6 +4,32 @@ import { getSupabase } from "./supabase.js";
 
 const BUCKET = "resume";
 
+/** Retry a transient storage failure (timeout, connection reset). */
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  const delays = [1000, 3000, 7000];
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      if (
+        /timed? ?out|connection|ECONNRESET|network|socket|fetch failed/i.test(
+          msg,
+        )
+      ) {
+        if (attempt < delays.length) {
+          await new Promise((r) => setTimeout(r, delays[attempt]));
+          continue;
+        }
+      }
+      throw e;
+    }
+  }
+  throw lastErr;
+}
+
 /**
  * Fetch the user's resume text for evaluation.
  *
@@ -13,30 +39,71 @@ const BUCKET = "resume";
  */
 export async function fetchResumeText(userId: string): Promise<string> {
   const sb = getSupabase();
-  const { data: files, error } = await sb.storage.from(BUCKET).list("", {
-    search: `${userId}-resume`,
+
+  // The uploaded resume key is DETERMINISTIC — the frontend writes
+  // `resume/<userId>-resume.<ext>` (see app/actions/resume.ts). Only the
+  // extension is unknown, so probe the allowed extensions directly.
+  //
+  // Do NOT use `storage.list("", { search })` here. On this project a LIST
+  // with a `search` filter exceeds the storage gateway's statement timeout and
+  // fails with HTTP 544 `DatabaseTimeout` ("The connection to the database
+  // timed out"), which aborted every evaluation before a single job was scored.
+  // A direct GET of an exact key succeeds regardless.
+  const candidates = ["pdf", "docx", "doc"].map(
+    (ext) => `${userId}-resume.${ext}`,
+  );
+
+  return withRetry(async () => {
+    let match: string | null = null;
+    let blob: Blob | null = null;
+    let lastErr = "object not found";
+
+    for (const name of candidates) {
+      const { data, error } = await sb.storage.from(BUCKET).download(name);
+      if (!error && data) {
+        match = name;
+        blob = data;
+        break;
+      }
+      if (error) lastErr = error.message;
+    }
+
+    if (!match || !blob) {
+      // A genuine miss is final; a transient storage error is deliberately
+      // worded so `withRetry` backs off and tries the whole probe again.
+      if (/not[ _-]?found|does not exist|status 40[04]/i.test(lastErr)) {
+        throw new Error(
+          "No resume found for this user. Please upload a resume first.",
+        );
+      }
+      throw new Error(`Failed to load resume: ${lastErr}`);
+    }
+
+    return await extractText(blob, match);
   });
-  if (error) {
-    throw new Error(`Failed to list resume: ${error.message}`);
-  }
+}
 
-  const match = files?.find((f) => f.name.startsWith(`${userId}-resume`));
-  if (!match) {
-    throw new Error(
-      "No resume found for this user. Please upload a resume first.",
-    );
-  }
+/**
+ * Short-TTL in-process cache of the raw resume text, keyed by userId.
+ *
+ * The evaluation worker downloads the resume for EVERY job in a batch, and a
+ * ~185KB object through a degraded API gateway takes ~10s — 24 jobs meant 24
+ * downloads (several minutes) before any scoring began. Keep the TTL short so
+ * a freshly uploaded resume is still picked up quickly.
+ *
+ * Only successful loads are cached; a storage failure must not poison the
+ * cache for the whole batch.
+ */
+const RESUME_CACHE_TTL_MS = 60_000;
+const resumeCache = new Map<string, { text: string; at: number }>();
 
-  const { data: blob, error: dlErr } = await sb.storage
-    .from(BUCKET)
-    .download(match.name);
-  if (dlErr || !blob) {
-    throw new Error(
-      `Failed to download resume: ${dlErr?.message ?? "unknown"}`,
-    );
-  }
+export async function fetchResumeTextCached(userId: string): Promise<string> {
+  const hit = resumeCache.get(userId);
+  if (hit && Date.now() - hit.at < RESUME_CACHE_TTL_MS) return hit.text;
 
-  return await extractText(blob, match.name);
+  const text = await fetchResumeText(userId);
+  resumeCache.set(userId, { text, at: Date.now() });
+  return text;
 }
 
 async function extractText(blob: Blob, fileName: string): Promise<string> {

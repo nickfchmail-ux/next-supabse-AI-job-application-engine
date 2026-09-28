@@ -55,6 +55,13 @@ const PRINT_CSS = `
     section, .project { break-inside: avoid; }
     p, li { orphans: 3; widows: 3; }
     a { color: inherit; }
+
+    /* The printed resume is the DOCUMENT and nothing else. App chrome
+       (version tabs, fine-tune textarea, Enhance/Regenerate buttons) must
+       never reach paper — even when the document is printed outside the
+       in-app viewer, e.g. directly from its stored HTML file. */
+    nav, button, textarea, input, select, [data-print-hide], .no-print,
+    .print-hide { display: none !important; }
   }
 `;
 

@@ -3,9 +3,16 @@ import type {
   EvaluateJobMessage,
   JobForEvaluation,
 } from "../shared/types.js";
+import {
+  MIN_ADVERT_CHARS,
+  NO_ADVERT_REASON,
+  advertText,
+  hasUsableAdvert,
+} from "./advert.js";
 import { evaluateSingleJobWithLLM } from "./ai.js";
+import { withDbRetry } from "./dbRetry.js";
 import { buildSingleJobPrompt } from "./prompts.js";
-import { fetchResumeText, sanitizeResume } from "./resume.js";
+import { fetchResumeTextCached, sanitizeResume } from "./resume.js";
 import { enqueueDocumentRequest } from "./storageQueue.js";
 import { getSupabase } from "./supabase.js";
 
@@ -39,19 +46,78 @@ export async function evaluateSingleJob(
   const sb = getSupabase();
 
   // Load the one job row (fresh) so we evaluate the latest description.
-  const { data: jobRow, error: jobErr } = await sb
-    .from("jobs")
-    .select("*")
-    .eq("id", msg.jobId)
-    .eq("user_id", msg.userId)
-    .maybeSingle();
-  if (jobErr)
-    throw new Error(`Failed to load job ${msg.jobId}: ${jobErr.message}`);
+  // Retried: a transient PostgREST timeout says nothing about the data.
+  const jobRow = await withDbRetry(
+    `load job ${msg.jobId}`,
+    async () => {
+      const { data, error } = await sb
+        .from("jobs")
+        .select("*")
+        .eq("id", msg.jobId)
+        .eq("user_id", msg.userId)
+        .maybeSingle();
+      if (error) {
+        throw new Error(`Failed to load job ${msg.jobId}: ${error.message}`);
+      }
+      return data;
+    },
+    log,
+  );
   if (!jobRow) throw new Error(`Job ${msg.jobId} not found`);
   const job = jobRow as unknown as JobForEvaluation;
 
-  // Resume (contact-stripped for evaluation).
-  const rawResume = await fetchResumeText(msg.userId);
+  // ── Refuse to score a job whose advert we never captured ────────────────
+  // A board listing carries only a one-line teaser; the real advert arrives
+  // from the detail fetch. When that fetch is blocked the row holds nothing
+  // but the teaser, and scoring it anyway invented a confident
+  // `fit_score: 76` — four "reasons" written from 69 characters. Leave it
+  // UNSCORED and say why, rather than manufacture a match.
+  //
+  // Throwing here is deliberate and safe: `evaluateWorker` catches it and
+  // rolls the job into its batch's `failed` counter, so the run still
+  // finalizes. A bare `return` would leave `remaining_jobs` above zero
+  // forever and the UI stuck on "Matching…". Because the throw is caught
+  // INSIDE the worker, the Storage Queue does not redeliver the message.
+  // No LLM call is made, so skipping costs nothing.
+  if (!hasUsableAdvert(job)) {
+    log(
+      `job ${job.id}: only ${advertText(job).length} chars of advert captured ` +
+        `(min ${MIN_ADVERT_CHARS}) — not scoring`,
+    );
+    // Skip a redundant write when the row is already flagged this exact way:
+    // the UPDATE would bump `updated_at` and push a Realtime event each time.
+    const alreadyFlagged =
+      job.status === "failed" &&
+      (jobRow as unknown as { last_error?: string | null }).last_error ===
+        NO_ADVERT_REASON;
+    if (!alreadyFlagged) {
+      await withDbRetry(
+        `flag job ${job.id} (no advert captured)`,
+        async () => {
+          const { error: flagErr } = await sb
+            .from("jobs")
+            .update({
+              fit: null,
+              fit_score: null,
+              fit_reasons: [],
+              not_fit_reasons: [],
+              status: "failed",
+              last_error: NO_ADVERT_REASON,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", job.id)
+            .eq("user_id", msg.userId);
+          if (flagErr) throw new Error(flagErr.message);
+        },
+        log,
+      );
+    }
+    throw new Error(NO_ADVERT_REASON);
+  }
+
+  // Resume (contact-stripped for evaluation). Cached per user — see
+  // fetchResumeTextCached; the raw object is fetched at most once a minute.
+  const rawResume = await fetchResumeTextCached(msg.userId);
   const resumeText = sanitizeResume(rawResume, { includeContact: false });
 
   // ONE LLM call → fit + score + reasons. No cover letter / resume here.
@@ -140,12 +206,23 @@ export async function evaluateSingleJob(
     }
   }
 
-  const { error: updateErr } = await sb
-    .from("jobs")
-    .update(patch)
-    .eq("id", job.id)
-    .eq("user_id", msg.userId);
-  if (updateErr) throw new Error(updateErr.message);
+  // ── The most important write in the whole flow ──────────────────────────
+  // The LLM call above has ALREADY run (and been paid for). A transient
+  // PostgREST `upstream request timeout` here used to throw, and the worker
+  // recorded the job as failed — discarding a perfectly good score. Retry
+  // until the patch lands; the update is idempotent (full row by job id).
+  await withDbRetry(
+    `save job ${job.id}`,
+    async () => {
+      const { error: updateErr } = await sb
+        .from("jobs")
+        .update(patch)
+        .eq("id", job.id)
+        .eq("user_id", msg.userId);
+      if (updateErr) throw new Error(updateErr.message);
+    },
+    log,
+  );
 
   log(
     `job done: job=${job.id} fit=${evalResult.fit} score=${evalResult.fit_score}`,

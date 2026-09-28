@@ -1,7 +1,7 @@
 import type { JobForEvaluation } from "../shared/types.js";
 import { evaluateSingleJobWithLLM, generateResumeWithLLM } from "./ai.js";
 import { buildResumePrompt, buildSingleJobPrompt } from "./prompts.js";
-import { fetchResumeText, sanitizeResume } from "./resume.js";
+import { fetchResumeTextCached, sanitizeResume } from "./resume.js";
 import { storeGeneratedResume } from "./resumeDocuments.js";
 import { enhanceResumeForPrint } from "./resumePrint.js";
 import { notifyStateChange } from "./socket.js";
@@ -88,7 +88,7 @@ export async function evaluateRun(params: {
   let resumeText: string; // contact-stripped (evaluation)
   let resumeTextWithContact: string; // contact included (tailored resume)
   try {
-    const rawResume = await fetchResumeText(userId);
+    const rawResume = await fetchResumeTextCached(userId);
     resumeText = sanitizeResume(rawResume, { includeContact: false });
     resumeTextWithContact = sanitizeResume(rawResume, {
       includeContact: true,

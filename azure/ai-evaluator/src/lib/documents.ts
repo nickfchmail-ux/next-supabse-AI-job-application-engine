@@ -39,6 +39,107 @@ import { enhanceResumeForPrint } from "./resumePrint.js";
 import { notifyJobStateChange, notifyStateChange } from "./socket.js";
 import { getSupabase } from "./supabase.js";
 
+/**
+ * Recover the candidate's name from the uploaded resume text.
+ *
+ * The name is NEVER stored in our database — `profiles` has no name column and
+ * signup only collects email + password — so the ONLY source is the resume the
+ * user uploaded. A resume puts the name on its FIRST non-empty line, usually
+ * joined to contact details (`NAME | email | phone`).
+ *
+ * Internal commas are KEPT because they are part of the name (`FONG CHUN HONG,
+ * NICK` — family name after the comma, Hong Kong convention). Only the contact
+ * segments around the name are dropped.
+ */
+function candidateNameFromResumeText(resumeText: string): string {
+  const first = resumeText
+    .replace(/\u00a0/g, " ")
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((l) => l.trim())
+    .find(Boolean);
+  if (!first) return "";
+
+  const segment = (first.split(/[|·•]|\s{2,}|\t/)[0] ?? "").trim();
+  const cleaned = segment
+    .replace(/^[\s\-–—|·•:;,.]+/, "")
+    .replace(/[\s\-–—|·•:;]+$/, "")
+    .trim();
+
+  if (cleaned.length < 2 || cleaned.length > 80) return "";
+  // A bare document label ("Curriculum Vitae") is not a name.
+  if (/^(resume|curriculum vitae|cv|candidate|applicant)$/i.test(cleaned)) {
+    return "";
+  }
+  if (/[@<>/\\]|\d{3,}/.test(cleaned)) return ""; // contact data, not a name
+  if (!/[a-z\u4e00-\u9fff]/i.test(cleaned)) return ""; // must have letters
+  return cleaned;
+}
+
+/** Escape a string for use as HTML text content. */
+function escapeHtmlText(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** Strip the trailing document label + decoration so two headings compare cleanly. */
+function comparableHeading(raw: string): string {
+  return raw
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\s*[-–—|·•]\s*(resume|curriculum vitae|cv)\s*$/i, "")
+    .replace(/^[\s\-–—|·•:;,.]+/, "")
+    .replace(/[\s\-–—|·•:;]+$/, "")
+    .trim();
+}
+
+/**
+ * Rewrite the resume's `<h1>` heading to `<NAME> - RESUME`.
+ *
+ * Only a PLAIN-TEXT `<h1>` whose current text is already the candidate's name
+ * is touched, so a styled or unexpected heading is left exactly as generated.
+ * Re-applying to an already-correct heading is a no-op (the trailing document
+ * label is stripped before comparing), which keeps it idempotent with the
+ * client-side rewrite of the same document.
+ */
+function stampResumeHeading(html: string, name: string, title: string): string {
+  if (!name || !title) return html;
+  const re = /(<h1\b[^>]*>)([\s\S]*?)(<\/h1>)/i;
+  const match = html.match(re);
+  if (!match || match.index === undefined) return html;
+  if (/<[a-z][\s\S]*>/i.test(match[2])) return html; // styled — leave alone
+  if (
+    comparableHeading(match[2]).toLowerCase() !== name.toLowerCase()
+  ) {
+    return html;
+  }
+  return (
+    html.slice(0, match.index) +
+    match[1] +
+    escapeHtmlText(title) +
+    match[3] +
+    html.slice(match.index + match[0].length)
+  );
+}
+
+/**
+ * Write `title` into the document's `<title>`. A `<title>` is never rendered
+ * on the page, so this cannot change what the resume looks like or what the
+ * print stylesheet hides — it only names the file the browser suggests when
+ * the user chooses "Save as PDF". No-op when `title` is empty, so an
+ * unrecoverable name simply leaves the generated title untouched.
+ */
+function stampDocumentTitle(html: string, title: string): string {
+  if (!title) return html;
+  const tag = `<title>${escapeHtmlText(title)}</title>`;
+  if (/<title\b[^>]*>[\s\S]*?<\/title>/i.test(html)) {
+    return html.replace(/<title\b[^>]*>[\s\S]*?<\/title>/i, tag);
+  }
+  if (/<head\b[^>]*>/i.test(html)) {
+    return html.replace(/(<head\b[^>]*>)/i, `$1${tag}`);
+  }
+  return `${tag}${html}`;
+}
+
 /** Load a job row, strictly scoped to its owner. */
 async function loadOwnedJob(
   jobId: string,
@@ -168,7 +269,24 @@ export async function generateTailoredResume(
     const { resumeHtml } = await generateResumeWithLLM(
       buildResumePrompt(resumeText, job, refinement, existingHtml),
     );
-    const printReadyHtml = enhanceResumeForPrint(resumeHtml);
+    // The stored HTML carries the candidate's name in both places the user
+    // sees it:
+    //   - `<h1>FONG CHUN HONG, NICK - RESUME</h1>` — what the resume reads as
+    //   - `<title>FONG CHUN HONG, NICK - RESUME</title>` — names the file the
+    //     browser suggests in its "Save as PDF" dialog
+    // The name is recovered from the uploaded resume, because it is stored
+    // nowhere else (no `profiles` column, UUID-only storage keys). Both
+    // rewrites are no-ops when the name can't be recovered.
+    const candidateName = candidateNameFromResumeText(resumeText);
+    const docTitle = candidateName ? `${candidateName} - RESUME` : "";
+    const printReadyHtml = stampDocumentTitle(
+      stampResumeHeading(
+        enhanceResumeForPrint(resumeHtml),
+        candidateName,
+        docTitle,
+      ),
+      docTitle,
+    );
     const { resumeUrl, fileName } = await storeGeneratedResume({
       userId,
       jobId,

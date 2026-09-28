@@ -1,0 +1,207 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.46.1.21595",
+      "templateHash": "7193653810220516555"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "functionAppName": {
+      "type": "string",
+      "defaultValue": "jobsautomation-evaluator-v2"
+    },
+    "storageAccountName": {
+      "type": "string",
+      "defaultValue": "jobsautold46rmnuvvqpi"
+    },
+    "supabaseServiceKey": {
+      "type": "securestring"
+    },
+    "deepSeekApi": {
+      "type": "securestring"
+    },
+    "stateWebhookSecret": {
+      "type": "securestring"
+    },
+    "supabaseUrl": {
+      "type": "string",
+      "defaultValue": "https://uqrgivzeklqehuqqqqyv.supabase.co"
+    },
+    "deepSeekBaseUrl": {
+      "type": "string",
+      "defaultValue": "https://api.deepseek.com/v1"
+    },
+    "deepSeekModel": {
+      "type": "string",
+      "defaultValue": "deepseek-chat"
+    },
+    "stateWebhookUrl": {
+      "type": "string",
+      "defaultValue": "https://ai-job-server-r2dk.onrender.com/webhook/state"
+    },
+    "defaultCountryCode": {
+      "type": "string",
+      "defaultValue": "hk"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}-plan', parameters('functionAppName'))]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Y1",
+        "tier": "Dynamic"
+      },
+      "kind": "functionapp",
+      "properties": {
+        "reserved": true
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2023-01-01",
+      "name": "[parameters('functionAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp,linux",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', format('{0}-plan', parameters('functionAppName')))]",
+        "siteConfig": {
+          "linuxFxVersion": "Node|22",
+          "appSettings": [
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "node"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~4"
+            },
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};AccountKey={1};EndpointSuffix={2}', parameters('storageAccountName'), listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2023-05-01').keys[0].value, environment().suffixes.storage)]"
+            },
+            {
+              "name": "SUPABASE_URL",
+              "value": "[parameters('supabaseUrl')]"
+            },
+            {
+              "name": "SUPABASE_SERVICE_KEY",
+              "value": "[parameters('supabaseServiceKey')]"
+            },
+            {
+              "name": "DEEP_SEEK_BASE_URL",
+              "value": "[parameters('deepSeekBaseUrl')]"
+            },
+            {
+              "name": "DEEP_SEEK_API",
+              "value": "[parameters('deepSeekApi')]"
+            },
+            {
+              "name": "DEEP_SEEK_MODEL",
+              "value": "[parameters('deepSeekModel')]"
+            },
+            {
+              "name": "EvaluationQueue",
+              "value": "evaluation-requests"
+            },
+            {
+              "name": "ResumeQueue",
+              "value": "resume-requests"
+            },
+            {
+              "name": "CoverLetterQueue",
+              "value": "cover-letter-requests"
+            },
+            {
+              "name": "STATE_WEBHOOK_URL",
+              "value": "[parameters('stateWebhookUrl')]"
+            },
+            {
+              "name": "STATE_WEBHOOK_SECRET",
+              "value": "[parameters('stateWebhookSecret')]"
+            },
+            {
+              "name": "DefaultCountryCode",
+              "value": "[parameters('defaultCountryCode')]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', format('{0}-plan', parameters('functionAppName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), parameters('functionAppName'), 'storageblob')]",
+      "properties": {
+        "roleDefinitionId": "/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-01-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), parameters('functionAppName'), 'storagequeue')]",
+      "properties": {
+        "roleDefinitionId": "/providers/Microsoft.Authorization/roleDefinitions/974c5e8b-45b9-4653-ba55-5f855dd0fb88",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-01-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), parameters('functionAppName'), 'storagetable')]",
+      "properties": {
+        "roleDefinitionId": "/providers/Microsoft.Authorization/roleDefinitions/0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-01-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "functionAppName_out": {
+      "type": "string",
+      "value": "[parameters('functionAppName')]"
+    },
+    "functionAppDefaultHostName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-01-01').defaultHostName]"
+    },
+    "evaluatorBaseUrl": {
+      "type": "string",
+      "value": "[format('https://{0}', reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-01-01').defaultHostName)]"
+    },
+    "principalId_out": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-01-01', 'full').identity.principalId]"
+    }
+  }
+}

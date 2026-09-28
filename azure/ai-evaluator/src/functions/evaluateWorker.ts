@@ -1,9 +1,7 @@
 import { InvocationContext, StorageQueueHandler } from "@azure/functions";
+import { withDbRetry } from "../lib/dbRetry.js";
 import { evaluateSingleJob } from "../lib/evaluateJob.js";
-import {
-  invalidateStateCache,
-  notifyStateChange,
-} from "../lib/socket.js";
+import { invalidateStateCache, notifyStateChange } from "../lib/socket.js";
 import {
   incrementEvaluationRun,
   setPipelineRunEvaluationStatus,
@@ -73,25 +71,43 @@ export const evaluateWorker: StorageQueueHandler<EvaluateJobMessage> = async (
     context.log(
       `batch ${evaluationRunId}: processed=${res.processed}/${res.total} failed=${res.failed} fit=${res.fit} notFit=${res.notFit} done=${res.done}`,
     );
-    await notifyStateChange(userId, runId);
+    // Non-fatal: the rollup above already succeeded. A failed push must NOT
+    // skip the finalize below — that is what left runs stuck on "Matching…".
+    await notifyStateChange(userId, runId).catch((e) =>
+      context.error(
+        `notify after rollup failed: ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    );
 
-    if (res.done) {
+    // `res.total > 0` guards a STALE MESSAGE. A retry deletes the previous
+    // batch rows and inserts new ones, so a worker redelivered from the old
+    // batch finds total=0 — without this guard it would consider itself "done"
+    // and flip the CURRENT run's evaluation_status to completed/failed early.
+    if (res.total > 0 && res.done) {
       // Mark the batch terminal (completed/failed), then the run(s).
-      const { error: batchErr } = await sb
-        .from("evaluation_runs")
-        .update({
-          status: res.processed > 0 ? "completed" : "failed",
-          last_error:
-            res.failed > 0
-              ? `${res.failed} job(s) could not be matched.`
-              : null,
-          completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", evaluationRunId);
-      if (batchErr) {
-        context.error(`finalize batch failed: ${batchErr.message}`);
-      }
+      await withDbRetry(
+        `finalize batch ${evaluationRunId}`,
+        async () => {
+          const { error: batchErr } = await sb
+            .from("evaluation_runs")
+            .update({
+              status: res.processed > 0 ? "completed" : "failed",
+              last_error:
+                res.failed > 0
+                  ? `${res.failed} job(s) could not be matched.`
+                  : null,
+              completed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", evaluationRunId);
+          if (batchErr) throw new Error(batchErr.message);
+        },
+        (m) => context.log(m),
+      ).catch((e) =>
+        context.error(
+          `finalize batch failed: ${e instanceof Error ? e.message : String(e)}`,
+        ),
+      );
 
       const overall = res.processed > 0 ? "completed" : "failed";
       const finalErr =
@@ -110,7 +126,11 @@ export const evaluateWorker: StorageQueueHandler<EvaluateJobMessage> = async (
       await invalidateStateCache(userId, runId).catch((e) =>
         context.error(`invalidate cache ${runId} failed: ${e.message}`),
       );
-      await notifyStateChange(userId, runId);
+      await notifyStateChange(userId, runId).catch((e) =>
+        context.error(
+          `notify after finalize failed: ${e instanceof Error ? e.message : String(e)}`,
+        ),
+      );
     }
   } catch (e) {
     context.error(

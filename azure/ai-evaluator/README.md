@@ -44,15 +44,18 @@ each concern scales, retries, and fails independently:
   The `resumeWorker` / `coverLetterWorker` consume it independently.
 - **Durability**: status lives in Supabase (`resume_status` /
   `cover_letter_status`). If the user refreshes the page mid-generation, the
-  detail page re-reads `building` and shows "Generating…" — the Service Bus
+  detail page re-reads `building` and shows "Generating…" — the queue
   message is already durable, so the build continues server-side.
 - **Security**: every HTTP trigger + worker verifies ownership via
   `.eq("user_id", userId)` on every query/update. RLS on `jobs` +
   `generated_resumes` additionally protects the browser/Realtime path.
 
-This respects the **two-Service-Bus model**: the **scraper** owns its own
-Service Bus in `backend-scraping-api/azure/functions`; the **evaluator** owns
-its own separate Service Bus for evaluation + resume + cover letter.
+This respects the **separate-queues model**: the **scraper** owns its queues in
+`backend-scraping-api/azure/functions`; the **evaluator** owns its own separate
+queues for evaluation + resume + cover letter. Both are plain Azure **Storage
+Queues** ($0) living in their own Function App's `AzureWebJobsStorage`. Service
+Bus (~$10/mo) and Event Hubs (~$11/mo) were both retired so the stack has zero
+recurring messaging cost.
 
 - **Live state over WebSocket**: at each progress point (start, per-job,
   completion, document done) the evaluator POSTs to the backend Express app's
@@ -69,11 +72,11 @@ its own separate Service Bus for evaluation + resume + cover letter.
 | Function            | Trigger           | Purpose                                                                  |
 | ------------------- | ----------------- | ------------------------------------------------------------------------ |
 | `evaluate`          | HTTP POST         | Validate the run, enqueue one message per job (202), return immediately. |
-| `evaluateWorker`    | Service Bus queue | Score ONE job (fit + score + reasons).                                   |
+| `evaluateWorker`    | Storage Queue     | Score ONE job (fit + score + reasons).                                   |
 | `evaluateStatus`    | HTTP GET          | Per-batch progress for a run (used by the frontend live UI).             |
 | `generateDocument`  | HTTP POST         | Start an on-demand tailored resume / cover letter (ownership-checked).   |
-| `resumeWorker`      | Service Bus queue | Generate + store a tailored resume for one job.                          |
-| `coverLetterWorker` | Service Bus queue | Generate + persist a cover letter for one job.                           |
+| `resumeWorker`      | Storage Queue     | Generate + store a tailored resume for one job.                          |
+| `coverLetterWorker` | Storage Queue     | Generate + persist a cover letter for one job.                           |
 
 ## Local development
 
@@ -90,9 +93,9 @@ Requires [Azure Functions Core Tools](https://learn.microsoft.com/azure/azure-fu
 
 | Variable                              | Purpose                                                  |
 | ------------------------------------- | -------------------------------------------------------- |
-| `ServiceBus__fullyQualifiedNamespace` | Evaluator's OWN Service Bus namespace (managed identity) |
-| `ServiceBus__credential`              | `managedidentity` (prod) / `connectionstring` (local)    |
-| `ServiceBus__connectionString`        | SAS connection string for local dev                      |
+| `AzureWebJobsStorage__accountName`    | Storage account holding the queues (managed identity)     |
+| `AzureWebJobsStorage__credential`     | `managedidentity` in Azure                                |
+| `AzureWebJobsStorage`                 | Full connection string — local dev only                   |
 | `EvaluationQueue`                     | Evaluation queue (default `evaluation-requests`)         |
 | `ResumeQueue`                         | Resume queue (default `resume-requests`)                 |
 | `CoverLetterQueue`                    | Cover-letter queue (default `cover-letter-requests`)     |

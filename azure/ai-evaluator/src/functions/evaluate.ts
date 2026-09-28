@@ -19,6 +19,67 @@ import type {
 } from "../shared/types.js";
 
 /**
+ * How long an in-flight evaluation may sit without progress before we treat it
+ * as dead and allow the user to start it again. A batch can be abandoned
+ * mid-run — every remaining queue message dies on a transient Supabase
+ * storage/DB timeout, or the instance handling them is recycled — which leaves
+ * `pipeline_runs.evaluation_status` frozen on `evaluating` forever.
+ */
+const STALE_EVAL_MS = 10 * 60 * 1000;
+
+/**
+ * Budget for a SINGLE Supabase round-trip on the request path.
+ *
+ * This handler makes several Supabase calls in sequence, so one unbounded call
+ * is enough to turn a slow database into "Evaluation took too long to start." —
+ * an error the user can neither act on nor distinguish from a crash. 45s leaves
+ * room for the genuinely slow calls (a 500-row `jobs` select) while still
+ * replying with something retryable when the database is genuinely down.
+ */
+const DB_CALL_TIMEOUT_MS = Number(
+  process.env["EVALUATE_DB_TIMEOUT_MS"] ?? 45_000,
+);
+
+/**
+ * Budget for the WHOLE request, across every Supabase call it makes.
+ *
+ * Per-call timeouts alone are not enough: this handler makes ~7 calls in
+ * sequence, so a fully stalled database would take ~7 x 45s to produce an
+ * error — far longer than the client will wait, which reproduces the original
+ * "took too long" symptom. Once this budget is spent the remaining calls fail
+ * immediately and the handler returns its 503 straight away.
+ */
+const REQUEST_BUDGET_MS = Number(
+  process.env["EVALUATE_REQUEST_BUDGET_MS"] ?? 60_000,
+);
+
+/** A Supabase call that never answered — always transient, never a data error. */
+class DbUnavailableError extends Error {}
+
+/** Classify an error/message as "the transport died", not "the data was rejected". */
+function isDbUnavailable(e: unknown): boolean {
+  if (e instanceof DbUnavailableError) return true;
+  const msg = e instanceof Error ? e.message : String(e);
+  return /timed?[ _-]?out|abort(ed)?|upstream request|database[ _-]?timeout|fetch failed|socket hang up|\b50[234]\b|\b544\b/i.test(
+    msg,
+  );
+}
+
+/**
+ * The database did not answer in time — retryable, and not the caller's fault.
+ */
+function dbUnavailable(detail: string): HttpResponseInit {
+  return json(
+    {
+      error:
+        "The database didn't respond in time. Please try again in a moment.",
+      detail,
+    },
+    503,
+  );
+}
+
+/**
  * POST /api/evaluate
  *
  * The single entry point for AI evaluation. Loads the unevaluated jobs,
@@ -53,18 +114,61 @@ export const evaluate: HttpHandler = async (
     s.trim().toLowerCase().replace(/\s+/g, "_");
 
   const sb = getSupabase();
+
+  // Whole-request budget, shared by every Supabase call below.
+  const deadlineAt = Date.now() + REQUEST_BUDGET_MS;
+
+  /**
+   * Await a Supabase call, bounded by both the per-call and the request budget.
+   * Defined here (not at module scope) so it can see this request's deadline;
+   * module-level state would be shared across concurrent invocations.
+   */
+  async function dbCall<T>(label: string, op: PromiseLike<T>): Promise<T> {
+    const remaining = deadlineAt - Date.now();
+    if (remaining <= 0) {
+      throw new DbUnavailableError(
+        `${label} skipped: request budget of ${REQUEST_BUDGET_MS}ms exhausted`,
+      );
+    }
+    const budget = Math.max(1_000, Math.min(DB_CALL_TIMEOUT_MS, remaining));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        op,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () =>
+              reject(
+                new DbUnavailableError(
+                  `${label} timed out after ${budget}ms`,
+                ),
+              ),
+            budget,
+          );
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   try {
     // 1. The run must exist and belong to this user. The search key is read
     //    from the RUN ROW (source of truth) — never trusted from the client,
     //    which avoids the scrape-vs-evaluate keyword mismatch entirely.
-    const { data: run, error: runErr } = await sb
-      .from("pipeline_runs")
-      .select("id, status, evaluation_status, search_key")
-      .eq("id", runId)
-      .eq("user_id", userId)
-      .maybeSingle();
+    const { data: run, error: runErr } = await dbCall(
+      "load run",
+      sb
+        .from("pipeline_runs")
+        .select("id, status, evaluation_status, search_key, updated_at")
+        .eq("id", runId)
+        .eq("user_id", userId)
+        .maybeSingle(),
+    );
 
     if (runErr) {
+      if (isDbUnavailable(runErr.message))
+        return dbUnavailable("Failed to load run");
       return json({ error: runErr.message, detail: "Failed to load run" }, 500);
     }
     if (!run) {
@@ -102,10 +206,17 @@ export const evaluate: HttpHandler = async (
     //    account-wide (keyed) case, "done" means no unevaluated jobs remain —
     //    allow re-running so the user can match a different search key from
     //    the same run. Only block an actively-running evaluation.
-    if (
+    //
+    //    STALE GUARD: only block when the in-flight evaluation is RECENT. A
+    //    dead batch would otherwise reject every retry with "This run is
+    //    already being matched." while nothing is actually running.
+    const inFlight =
       run.evaluation_status === "evaluating" ||
-      run.evaluation_status === "queued"
-    ) {
+      run.evaluation_status === "queued";
+    const evalAgeMs = run.updated_at
+      ? Date.now() - new Date(run.updated_at as string).getTime()
+      : Number.POSITIVE_INFINITY;
+    if (inFlight && evalAgeMs < STALE_EVAL_MS) {
       return json({ error: "This run is already being matched." }, 409);
     }
 
@@ -132,8 +243,13 @@ export const evaluate: HttpHandler = async (
     } else {
       jobQuery = jobQuery.eq("pipeline_run_id", runId);
     }
-    const { data: jobRows, error: jobsErr } = await jobQuery;
+    const { data: jobRows, error: jobsErr } = await dbCall(
+      "load jobs",
+      jobQuery,
+    );
     if (jobsErr) {
+      if (isDbUnavailable(jobsErr.message))
+        return dbUnavailable("Failed to load jobs");
       return json(
         { error: jobsErr.message, detail: "Failed to load jobs" },
         500,
@@ -150,9 +266,10 @@ export const evaluate: HttpHandler = async (
     // user is out of quota, reject before any work is enqueued.
     let usageId: string | null = null;
     try {
-      const usage = await consumeUsage(userId, "evaluation", {
-        searchKey: searchKey ?? null,
-      });
+      const usage = await dbCall(
+        "consume usage",
+        consumeUsage(userId, "evaluation", { searchKey: searchKey ?? null }),
+      );
       if (!usage.ok) {
         if (usage.reason === "limit_reached") {
           return json({ error: `LIMIT_REACHED: ${usage.message}` }, 402);
@@ -169,47 +286,56 @@ export const evaluate: HttpHandler = async (
 
     // 5. Mark queued up-front so a second click is rejected, then create one
     //    evaluation_runs batch row per keyword and enqueue ONE message per job.
-    await sb
-      .from("pipeline_runs")
-      .update({
-        evaluation_status: "queued",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", runId)
-      .eq("user_id", userId);
+    await dbCall(
+      "mark run queued",
+      sb
+        .from("pipeline_runs")
+        .update({
+          evaluation_status: "queued",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", runId)
+        .eq("user_id", userId),
+    );
 
     const now = new Date().toISOString();
     const batches = groupJobs(jobs);
-    await sb
-      .from("evaluation_runs")
-      .delete()
-      .eq("pipeline_run_id", runId)
-      .eq("user_id", userId)
-      .then(({ error }) => {
-        if (error) {
-          throw new Error(
-            `Failed to clear old evaluation runs: ${error.message}`,
-          );
-        }
-      });
+    await dbCall(
+      "clear old evaluation runs",
+      sb
+        .from("evaluation_runs")
+        .delete()
+        .eq("pipeline_run_id", runId)
+        .eq("user_id", userId)
+        .then(({ error }) => {
+          if (error) {
+            throw new Error(
+              `Failed to clear old evaluation runs: ${error.message}`,
+            );
+          }
+        }),
+    );
 
-    const { data: inserted, error: insertErr } = await sb
-      .from("evaluation_runs")
-      .insert(
-        batches.map((b) => ({
-          pipeline_run_id: runId,
-          user_id: userId,
-          keyword: b.keyword,
-          status: "queued",
-          total_jobs: b.jobs.length,
-          processed_jobs: 0,
-          failed_jobs: 0,
-          last_error: null,
-          created_at: now,
-          updated_at: now,
-        })),
-      )
-      .select("id, keyword");
+    const { data: inserted, error: insertErr } = await dbCall(
+      "create evaluation runs",
+      sb
+        .from("evaluation_runs")
+        .insert(
+          batches.map((b) => ({
+            pipeline_run_id: runId,
+            user_id: userId,
+            keyword: b.keyword,
+            status: "queued",
+            total_jobs: b.jobs.length,
+            processed_jobs: 0,
+            failed_jobs: 0,
+            last_error: null,
+            created_at: now,
+            updated_at: now,
+          })),
+        )
+        .select("id, keyword"),
+    );
     if (insertErr) {
       throw new Error(`Failed to create evaluation runs: ${insertErr.message}`);
     }
@@ -259,6 +385,10 @@ export const evaluate: HttpHandler = async (
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unexpected error";
     context.error(`evaluate failed: ${msg}`);
+    // A dead or stalled PostgREST is not the caller's fault, and the same click
+    // usually succeeds a moment later. Reporting 503 keeps that distinction
+    // visible instead of collapsing it into a generic server error.
+    if (isDbUnavailable(e)) return dbUnavailable(msg);
     return json({ error: msg }, 500);
   }
 };
