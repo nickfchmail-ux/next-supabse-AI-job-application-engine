@@ -1,7 +1,9 @@
 import { formatDate } from "@/lib/dateUtils";
+import { type FitVerdict } from "@/lib/funnel";
 import type { ResumeStatus } from "@/types/api";
 import { motion } from "motion/react";
 import Link from "next/link";
+import FitScoreBadge from "./FitScoreBadge";
 import ResumeStatusBadge from "./ResumeStatusBadge";
 
 export type Job = {
@@ -133,24 +135,6 @@ function formatSearchKey(key: string | null): string {
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function ScoreBadge({ score }: { score: number | null }) {
-  if (score === null) return null;
-  const color =
-    score >= 65
-      ? "bg-[var(--good-soft)] text-[var(--good)] border-[color-mix(in_srgb,var(--good)_20%,transparent)]"
-      : score >= 45
-        ? "bg-[var(--warn-soft)] text-[var(--warn)] border-[color-mix(in_srgb,var(--warn)_20%,transparent)]"
-        : "bg-[var(--bad-soft)] text-[var(--bad)] border-[color-mix(in_srgb,var(--bad)_20%,transparent)]";
-  return (
-    <span
-      className={`font-data text-xs font-semibold px-2.5 py-1 rounded-full border tabular-nums ${color}`}
-    >
-      {score}
-      <span className="opacity-60">/100</span>
-    </span>
-  );
-}
-
 /** Neutral treatment for jobs that haven't been AI-scored yet — never imply a score. */
 function AwaitingEvaluationBadge() {
   return (
@@ -163,10 +147,17 @@ function AwaitingEvaluationBadge() {
 export default function JobCard({
   job,
   backHref,
+  verdict,
 }: {
   job: Job | JobListItem;
   /** Optional return target appended to the detail link (e.g. `?from=/matches`) */
   backHref?: string;
+  /**
+   * The AI verdict the surrounding list is scoped to (the /matches tabs).
+   * Passed through so the score chip colour matches the tab instead of
+   * contradicting it. Leave undefined on lists that mix verdicts.
+   */
+  verdict?: FitVerdict | null;
 }) {
   const parsedSkills: string[] =
     typeof job.skills === "string"
@@ -264,7 +255,7 @@ export default function JobCard({
               {job.company}
             </p>
           </div>
-          <ScoreBadge score={job.fit_score} />
+          <FitScoreBadge score={job.fit_score} verdict={verdict} />
           {job.fit_score === null && <AwaitingEvaluationBadge />}
         </div>
 

@@ -228,6 +228,44 @@ export function fitBadge(score: number | null | undefined): FitBadgeCopy {
   };
 }
 
+/**
+ * The single source of truth for fit colour.
+ *
+ * Every score chip in the app reads its colours from here, so the same score can
+ * never be green in one list and amber in another. Do not hand-roll a second
+ * threshold set (the old 65/45 pair that used to live in JobCard and FitFilters
+ * was the reason a row could signal two different verdicts at once).
+ */
+export const FIT_BUCKET_STYLES: Record<FitBucket, string> = {
+  great:
+    "bg-[var(--good-soft)] text-[var(--good)] border-[color-mix(in_srgb,var(--good)_20%,transparent)]",
+  possible:
+    "bg-[var(--warn-soft)] text-[var(--warn)] border-[color-mix(in_srgb,var(--warn)_20%,transparent)]",
+  low: "bg-[var(--bad-soft)] text-[var(--bad)] border-[color-mix(in_srgb,var(--bad)_20%,transparent)]",
+  "not-analysed":
+    "bg-[var(--paper-soft)] text-[var(--ink-soft)] border-[var(--line)]",
+};
+
+/** The AI's binary verdict — what separates the two /matches tabs. */
+export type FitVerdict = "fit" | "notfit";
+
+export function fitVerdictLabel(verdict: FitVerdict): string {
+  return verdict === "fit" ? "Good fit" : "Not a fit";
+}
+
+/**
+ * Colours for a list that is *scoped* to a verdict (the /matches tabs).
+ *
+ * The verdict is a separate signal from the 0-100 score: the AI can call a job a
+ * fit at 48, or a non-fit at 71. When both are on screen with independent colours
+ * the row contradicts its own tab, so inside a verdict-scoped list the chip takes
+ * the verdict's colour and the number becomes supporting detail.
+ */
+export const FIT_VERDICT_STYLES: Record<FitVerdict, string> = {
+  fit: FIT_BUCKET_STYLES.great,
+  notfit: FIT_BUCKET_STYLES.low,
+};
+
 // ── Resume status ─────────────────────────────────────────────────
 
 export type ResumeTone = "neutral" | "active" | "success" | "error";

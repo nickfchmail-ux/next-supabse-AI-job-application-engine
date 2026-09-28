@@ -1,11 +1,13 @@
 "use client";
 
+import FitScoreBadge from "@/components/FitScoreBadge";
 import JobCard, { Job, JobListItem } from "@/components/JobCard";
 import {
   saveMatchesScrollPosition,
   useMatchesScrollRestore,
 } from "@/hooks/useMatchesScrollRestore";
 import { computeActualPostedTimestamp, formatDate } from "@/lib/dateUtils";
+import { type FitVerdict } from "@/lib/funnel";
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -94,17 +96,47 @@ interface FitFiltersProps {
   jobs: (Job | JobListItem)[];
   emptyMessage: string;
   emptyIcon?: React.ReactNode;
+  /**
+   * The route the user arrived from. Drives the row's detail link and the
+   * card's "back" target — this used to be hard-coded to /matches, so a row
+   * opened from /review offered to take you "back" to a page you had never
+   * visited.
+   */
+  from?: string;
+  /**
+   * The AI verdict this list is scoped to (the /matches tabs). When set, the
+   * score chip takes the verdict's colour instead of its own bucket colour, so
+   * a row can never display a colour that contradicts the tab above it.
+   */
+  verdict?: FitVerdict | null;
+  /**
+   * Render the score chip / "Fit score" column. Turn off for lists of unscored
+   * jobs (/review): a column that is blank on every single row implies those
+   * jobs were measured and came up empty.
+   */
+  showScore?: boolean;
+  /**
+   * Render the Applied bar plus the Applied / Applied-on columns. Turn off for
+   * lists that have nothing to do with application tracking (/review).
+   */
+  showApplied?: boolean;
 }
 
 export default function FitFilters({
   jobs,
   emptyMessage,
   emptyIcon,
+  from = "/matches",
+  verdict = null,
+  showScore = true,
+  showApplied = true,
 }: FitFiltersProps) {
   const router = useRouter();
   const [sourceFilter, setSourceFilter] = useState("All");
   const [keyFilter, setKeyFilter] = useState("All");
-  const [appliedFilter, setAppliedFilter] = useState("Not Applied");
+  // Defaults to "All". The page promises "everything the AI has scored", and a
+  // default-on "Not Applied" quietly hid every job you had already applied to.
+  const [appliedFilter, setAppliedFilter] = useState("All");
   // View mode (table vs card). Persisted to localStorage so the user's choice
   // survives navigating to a job and back — and rendered IMMEDIATELY (no
   // "table first, then card" flash on mobile).
@@ -175,12 +207,24 @@ export default function FitFilters({
         keyFilter === "All" ||
         formatKey(job.search_key ?? "Unknown") === keyFilter;
       const matchApplied =
+        !showApplied ||
         appliedFilter === "All" ||
         (appliedFilter === "Applied" && job.applied === true) ||
         (appliedFilter === "Not Applied" && !job.applied);
       return matchApplied && matchSource && matchKey;
     });
-  }, [sorted, sourceFilter, keyFilter, appliedFilter]);
+  }, [sorted, sourceFilter, keyFilter, appliedFilter, showApplied]);
+
+  /**
+   * The "Applied on" column only earns its width when at least one row has a
+   * date. `applied` and `applied_on` are independent columns, so it is normal
+   * for every row to render "—" — and a whole column of dashes reads as broken
+   * data rather than as "nobody recorded a date".
+   */
+  const hasAppliedDates = useMemo(
+    () => jobs.some((job) => Boolean(job.applied_on)),
+    [jobs],
+  );
 
   if (jobs.length === 0) {
     return (
@@ -215,17 +259,21 @@ export default function FitFilters({
           active={keyFilter}
           onChange={setKeyFilter}
         />
-        <div className="border-t border-zinc-100 dark:border-zinc-800" />
-        <FilterBar
-          label="Applied"
-          options={["Not Applied", "Applied"]}
-          active={appliedFilter}
-          onChange={setAppliedFilter}
-          colorMap={{
-            Applied: "bg-emerald-600 text-white",
-            "Not Applied": "bg-zinc-600 text-white",
-          }}
-        />
+        {showApplied && (
+          <>
+            <div className="border-t border-zinc-100 dark:border-zinc-800" />
+            <FilterBar
+              label="Applied"
+              options={["Not Applied", "Applied"]}
+              active={appliedFilter}
+              onChange={setAppliedFilter}
+              colorMap={{
+                Applied: "bg-emerald-600 text-white",
+                "Not Applied": "bg-zinc-600 text-white",
+              }}
+            />
+          </>
+        )}
         <div className="border-t border-zinc-100 dark:border-zinc-800" />
 
         <FilterBar
@@ -257,6 +305,11 @@ export default function FitFilters({
           {keyFilter !== "All" && (
             <span className="ml-1">
               · search key <strong>{keyFilter}</strong>
+            </span>
+          )}
+          {showApplied && appliedFilter !== "All" && (
+            <span className="ml-1">
+              · <strong>{appliedFilter}</strong>
             </span>
           )}
         </p>
@@ -312,121 +365,133 @@ export default function FitFilters({
           flash) without a hydration crash. */}
       <div suppressHydrationWarning>
         {filtered.length === 0 ? (
-        <div className="text-center py-20 text-zinc-400 dark:text-zinc-500">
-          <svg
-            className="w-10 h-10 mx-auto mb-3 opacity-40"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+          <div className="text-center py-20 text-zinc-400 dark:text-zinc-500">
+            <svg
+              className="w-10 h-10 mx-auto mb-3 opacity-40"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            <p className="text-base font-medium">No jobs match this filter</p>
+            <p className="text-sm mt-1">
+              Try selecting a different combination.
+            </p>
+          </div>
+        ) : viewMode === "card" ? (
+          <motion.div
+            layout
+            className="grid w-full gap-5 sm:grid-cols-2 xl:grid-cols-3"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-          <p className="text-base font-medium">No jobs match this filter</p>
-          <p className="text-sm mt-1">Try selecting a different combination.</p>
-        </div>
-      ) : viewMode === "card" ? (
-        <motion.div
-          layout
-          className="grid w-full gap-5 sm:grid-cols-2 xl:grid-cols-3"
-        >
-          <AnimatePresence mode="popLayout">
-            {filtered.map((job) => (
-              <JobCard key={job.id} job={job} backHref="/matches" />
-            ))}
-          </AnimatePresence>
-        </motion.div>
-      ) : (
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-x-auto shadow-sm">
-          <table className="w-full text-sm min-w-[640px]">
-            <thead>
-              <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
-                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">
-                  Title
-                </th>
-                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">
-                  Company
-                </th>
-                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">
-                  Location
-                </th>
-                <th className="text-center px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">
-                  Score
-                </th>
-                <th className="text-center px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">
-                  Applied
-                </th>
-                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">
-                  Applied On
-                </th>
-                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">
-                  Posted
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            <AnimatePresence mode="popLayout">
               {filtered.map((job) => (
-                <tr
+                <JobCard
                   key={job.id}
-                  onClick={() => {
-                    saveMatchesScrollPosition();
-                    router.push(`/jobs/${job.id}/fit?from=/matches`);
-                  }}
-                  className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer"
-                >
-                  <td className="px-4 py-3">
-                    <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 line-clamp-1">
-                      {job.title}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
-                    {job.company}
-                  </td>
-                  <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500 truncate max-w-50">
-                    {job.location}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    {job.fit_score !== null && (
-                      <span
-                        className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                          job.fit_score >= 65
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                            : job.fit_score >= 45
-                              ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                              : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
-                        }`}
-                      >
-                        {job.fit_score}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span
-                      className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                        job.applied
-                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-                          : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
-                      }`}
-                    >
-                      {job.applied ? "Yes" : "No"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500 whitespace-nowrap">
-                    {job.applied_on ? formatDate(job.applied_on) : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500 whitespace-nowrap">
-                    {formatDate(job.posted_date)}
-                  </td>
-                </tr>
+                  job={job}
+                  backHref={from}
+                  verdict={verdict}
+                />
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </AnimatePresence>
+          </motion.div>
+        ) : (
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-x-auto shadow-sm">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead>
+                <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
+                  <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">
+                    Title
+                  </th>
+                  <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">
+                    Company
+                  </th>
+                  <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">
+                    Location
+                  </th>
+                  {showScore && (
+                    <th className="text-center px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">
+                      Fit score
+                    </th>
+                  )}
+                  {showApplied && (
+                    <th className="text-center px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">
+                      Applied
+                    </th>
+                  )}
+                  {showApplied && hasAppliedDates && (
+                    <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">
+                      Applied on
+                    </th>
+                  )}
+                  <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-400">
+                    Posted
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {filtered.map((job) => (
+                  <tr
+                    key={job.id}
+                    onClick={() => {
+                      saveMatchesScrollPosition();
+                      router.push(
+                        `/jobs/${job.id}/fit?from=${encodeURIComponent(from)}`,
+                      );
+                    }}
+                    className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer"
+                  >
+                    <td className="px-4 py-3">
+                      <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 line-clamp-1">
+                        {job.title}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                      {job.company}
+                    </td>
+                    <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500 truncate max-w-50">
+                      {job.location}
+                    </td>
+                    {showScore && (
+                      <td className="px-4 py-3 text-center">
+                        <FitScoreBadge
+                          score={job.fit_score}
+                          verdict={verdict}
+                        />
+                      </td>
+                    )}
+                    {showApplied && (
+                      <td className="px-4 py-3 text-center">
+                        <span
+                          className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                            job.applied
+                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                              : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+                          }`}
+                        >
+                          {job.applied ? "Yes" : "No"}
+                        </span>
+                      </td>
+                    )}
+                    {showApplied && hasAppliedDates && (
+                      <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500 whitespace-nowrap">
+                        {job.applied_on ? formatDate(job.applied_on) : "—"}
+                      </td>
+                    )}
+                    <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500 whitespace-nowrap">
+                      {formatDate(job.posted_date)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -73,8 +73,8 @@ export default function JobFitCard({
             </h2>
             <p className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">
               Go to the Search page and click{" "}
-              <span className="font-medium">Match</span> for the search key
-              that found this job to see how well it fits your profile.
+              <span className="font-medium">Match</span> for the search key that
+              found this job to see how well it fits your profile.
             </p>
           </div>
         </div>

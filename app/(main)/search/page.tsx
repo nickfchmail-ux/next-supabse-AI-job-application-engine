@@ -31,16 +31,21 @@ export default async function SearchPage() {
       <PageHeader
         eyebrow="Search &amp; match"
         title="Find jobs worth applying to"
-        subtitle="Run a search across job boards, then let the AI score every listing against your resume — with a cover letter and tailored resume for the strong fits."
+        subtitle="Two steps: find listings from the job boards, then have the AI score them against your resume. The strong fits get a cover letter and a tailored resume."
       />
 
-      {/* Step 1 — Search (scrape) */}
+      {/* Step 1 — Search (scrape). Collecting listings is NOT scoring them, and
+          the step label says so explicitly: users used to assume a search on
+          its own produced fit scores. */}
       <section className="card overflow-hidden">
         <div className="px-6 py-3 border-b border-[var(--line)] flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--ink-faint)]">
           <span className="w-5 h-5 rounded-full bg-[var(--accent)] text-white flex items-center justify-center text-[10px]">
             1
           </span>
-          Search
+          Find jobs
+          <span className="ml-auto normal-case tracking-normal font-medium">
+            Collected, not scored
+          </span>
         </div>
         <div className="p-6">
           <Suspense
@@ -64,7 +69,10 @@ export default async function SearchPage() {
           <span className="w-5 h-5 rounded-full bg-[var(--accent)] text-white flex items-center justify-center text-[10px]">
             2
           </span>
-          Match to your resume
+          Score them
+          <span className="ml-auto normal-case tracking-normal font-medium">
+            This is the step that decides fit
+          </span>
         </div>
         <div className="p-6">
           <EvaluationStep />

@@ -27,7 +27,11 @@ export const metadata = { title: "Overview" };
  */
 const INSIGHTS_TIMEOUT_MS = 4000;
 
-async function withTimeout<T>(p: Promise<T>, fallback: T, ms: number): Promise<T> {
+async function withTimeout<T>(
+  p: Promise<T>,
+  fallback: T,
+  ms: number,
+): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   try {
     return await Promise.race([

@@ -1,14 +1,4 @@
-import { fitBadge } from "@/lib/funnel";
-
-const BUCKET_STYLES: Record<string, string> = {
-  great:
-    "bg-[var(--good-soft)] text-[var(--good)] border-[color-mix(in_srgb,var(--good)_20%,transparent)]",
-  possible:
-    "bg-[var(--warn-soft)] text-[var(--warn)] border-[color-mix(in_srgb,var(--warn)_20%,transparent)]",
-  low: "bg-[var(--bad-soft)] text-[var(--bad)] border-[color-mix(in_srgb,var(--bad)_20%,transparent)]",
-  "not-analysed":
-    "bg-[var(--paper-soft)] text-[var(--ink-soft)] border-[var(--line)]",
-};
+import { FIT_BUCKET_STYLES, fitBadge } from "@/lib/funnel";
 
 /**
  * Fit badge — color + text (never color alone) for WCAG 1.4.1.
@@ -24,7 +14,7 @@ export default function FitBadge({
   const { bucket, badge } = fitBadge(score);
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border font-semibold ${BUCKET_STYLES[bucket]} ${
+      className={`inline-flex items-center gap-1 rounded-full border font-semibold ${FIT_BUCKET_STYLES[bucket]} ${
         compact ? "px-2 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs"
       }`}
     >

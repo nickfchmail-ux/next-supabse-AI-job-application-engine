@@ -43,7 +43,7 @@ export default async function MatchesPage({
       <PageHeader
         eyebrow="Results"
         title="Matches"
-        subtitle="Every job the AI has scored against your resume — the strong fits to act on, and the near-misses worth understanding."
+        subtitle="Every job the AI has scored against your resume. The tabs split the AI's verdict; the fit score on each row shows how close that call was."
       />
 
       {/* Data region — suspends on the Supabase queries, shell paints first */}

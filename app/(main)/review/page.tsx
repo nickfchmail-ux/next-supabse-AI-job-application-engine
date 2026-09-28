@@ -51,11 +51,14 @@ export default async function ReviewPage() {
       <PageHeader
         eyebrow="Review"
         title="To review"
-        subtitle="Jobs scraped but not yet scored. Run a match to get the AI's verdict on each one."
+        subtitle="Jobs your searches collected that the AI has not scored yet. Nothing here has a verdict — run a match to get one."
       />
 
       <FitFilters
         jobs={jobs}
+        from="/review"
+        showScore={false}
+        showApplied={false}
         emptyMessage="Nothing waiting — everything has been scored, or you haven't searched yet. Start a search to bring jobs in."
       />
 
