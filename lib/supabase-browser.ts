@@ -45,7 +45,41 @@ export function setSupabaseSession(accessToken: string) {
   });
 }
 
+/**
+ * Drop the Browser client's session WITHOUT touching Supabase's servers.
+ *
+ * ⚠️ NEVER call `sb.auth.signOut()` here.
+ *
+ * `signOut()` defaults to `{ scope: "global" }` (see auth-js
+ * `SIGN_OUT_SCOPES[0]`), which POSTs `/auth/v1/logout?scope=global` and
+ * **revokes every refresh token for the user**. The session we hand to
+ * supabase-js IS the app's own session — `setSupabaseSession()` passes the
+ * httpOnly `token` cookie's value — so a "global" sign-out killed the app's
+ * `refresh_token` cookie too.
+ *
+ * It was invisible at first: the access token keeps working until it expires
+ * (~1h), so nothing looked wrong. Then the next navigation hit `proxy.ts`,
+ * which called `/auth/refresh`, got a 401 for the now-revoked token, took
+ * `transient: false` and deleted both cookies → bounced to /login.
+ *
+ * This is an effect CLEANUP (see `useRealtimeRun`), so it ran on every
+ * unmount — merely navigating away from the live dashboard revoked the
+ * user's session, and the logout appeared to strike at random up to an hour
+ * later. That was the recurring "app suddenly logs me out".
+ *
+ * `_removeSession()` clears the in-memory session and fires SIGNED_OUT with
+ * zero network calls, which is exactly the local teardown we want. It is
+ * internal API, so the call is optional: if a future version renames it we
+ * degrade to a no-op, which is safe — leaving the session in memory is
+ * harmless (the next mount re-sets it), whereas revoking it is not.
+ */
 export function clearSupabaseSession() {
   const sb = getSupabaseBrowser();
-  sb.auth.signOut();
+  void Promise.resolve(
+    (
+      sb.auth as unknown as { _removeSession?: () => unknown }
+    )._removeSession?.(),
+  ).catch(() => {
+    /* best-effort teardown — never let this throw into a render cleanup */
+  });
 }
